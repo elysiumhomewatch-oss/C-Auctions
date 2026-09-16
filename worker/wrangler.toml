@@ -1,0 +1,15 @@
+name = "consignment-auctions-api"
+main = "index.js"
+compatibility_date = "2025-01-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "consignment-auctions"
+database_id = "REPLACE_WITH_ID_FROM_D1_CREATE"
+
+# ── Secrets (never in this file — set with `wrangler secret put`) ──
+# ADMIN_KEY       — your login key for the admin dashboard
+# B2_KEY_ID       — Backblaze B2 application key ID
+# B2_APP_KEY      — Backblaze B2 application key
+# B2_BUCKET_ID    — Backblaze B2 bucket ID (from the bucket's details page)
+# B2_BUCKET_NAME  — Backblaze B2 bucket name
