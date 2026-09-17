@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Auctions</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Work+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --paper:   #EDEAE2;
+  --surface: #FFFFFF;
+  --ink:     #16211C;
+  --muted:   #6B6255;
+  --tide:    #1B4B43;
+  --tide-lt: #24645A;
+  --sun:     #E8A33D;
+  --line:    #D8D3C6;
+  --danger:  #A8402E;
+  --r: 10px;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--paper); color: var(--ink);
+  font-family: 'Work Sans', sans-serif; line-height: 1.5;
+}
+h1, h2, h3, .display { font-family: 'Space Grotesk', sans-serif; }
+
+/* ── Top bar ────────────────────────────────────────────── */
+.topbar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 1.1rem 1.5rem; border-bottom: 1px solid var(--line);
+  background: var(--surface); position: sticky; top: 0; z-index: 10;
+}
+.topbar h1 { font-size: 1.3rem; font-weight: 700; margin: 0; letter-spacing: -0.01em; }
+.live-pill {
+  display: inline-flex; align-items: center; gap: .4rem;
+  font-size: .78rem; color: var(--tide); font-weight: 500;
+}
+.live-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--tide); animation: pulse 2s infinite; }
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
+
+/* ── Layout ─────────────────────────────────────────────── */
+main { max-width: 1040px; margin: 0 auto; padding: 1.8rem 1.5rem 4rem; }
+.auction-title { font-size: 1.6rem; margin: 0 0 .3rem; }
+.auction-sub { color: var(--muted); font-size: .92rem; margin: 0 0 1.8rem; }
+
+.empty-state {
+  padding: 4rem 2rem; text-align: left; color: var(--muted);
+  border: 1px dashed var(--line); border-radius: var(--r); background: var(--surface);
+}
+.empty-state strong { display: block; color: var(--ink); font-size: 1.1rem; margin-bottom: .4rem; }
+
+/* ── Item grid ──────────────────────────────────────────── */
+.grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 1.1rem;
+}
+.card {
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--r);
+  overflow: hidden; cursor: pointer; transition: transform .15s, box-shadow .15s;
+  display: flex; flex-direction: column;
+}
+.card:hover { transform: translateY(-2px); box-shadow: 0 6px 18px rgba(22,33,28,.08); }
+.card.closed { opacity: .5; cursor: default; pointer-events: none; }
+.card-img { width: 100%; aspect-ratio: 4/3; object-fit: cover; background: var(--paper); display: block; }
+.card-img-ph {
+  width: 100%; aspect-ratio: 4/3; background: var(--paper);
+  display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 1.8rem;
+}
+.card-body { padding: .9rem 1rem 1.05rem; display: flex; flex-direction: column; gap: .5rem; flex: 1; }
+.card-name { font-weight: 600; font-size: .98rem; line-height: 1.3; }
+.card-desc { font-size: .82rem; color: var(--muted); flex: 1; }
+.card-meta { display: flex; align-items: baseline; justify-content: space-between; gap: .5rem; }
+.card-bid-label { font-size: .7rem; color: var(--muted); text-transform: none; }
+.card-bid-amount { font-size: 1.15rem; font-weight: 700; color: var(--tide); font-family: 'Space Grotesk', sans-serif; }
+.card-tags { display: flex; gap: .4rem; flex-wrap: wrap; }
+.tag {
+  font-size: .68rem; padding: .18rem .5rem; border-radius: 20px;
+  background: var(--paper); color: var(--muted); border: 1px solid var(--line);
+}
+.tag.closing { color: var(--sun); border-color: var(--sun); background: #FBF1E1; }
+.tag.closed-tag { color: var(--danger); border-color: var(--danger); background: #F7E9E6; }
+
+/* ── Bid modal ──────────────────────────────────────────── */
+.modal-overlay {
+  display: none; position: fixed; inset: 0; background: rgba(22,33,28,.5);
+  align-items: center; justify-content: center; padding: 1rem; z-index: 100;
+}
+.modal-overlay.open { display: flex; }
+.modal {
+  background: var(--surface); border-radius: var(--r); max-width: 420px; width: 100%;
+  padding: 1.6rem; position: relative; max-height: 90vh; overflow-y: auto;
+}
+.modal-close {
+  position: absolute; top: 1rem; right: 1rem; background: none; border: none;
+  font-size: 1.2rem; color: var(--muted); cursor: pointer; line-height: 1;
+}
+.modal h2 { font-size: 1.2rem; margin: 0 0 .2rem; }
+.modal-img { width: 100%; aspect-ratio: 4/3; object-fit: cover; border-radius: var(--r); margin: .8rem 0; }
+.current-bid-box {
+  background: var(--paper); border-radius: var(--r); padding: .8rem 1rem; margin-bottom: 1rem;
+  display: flex; justify-content: space-between; align-items: baseline;
+}
+.current-bid-box .amount { font-size: 1.4rem; font-weight: 700; color: var(--tide); font-family: 'Space Grotesk', sans-serif; }
+.current-bid-box .leader { font-size: .78rem; color: var(--muted); }
+.closes-line { font-size: .82rem; color: var(--sun); margin-bottom: 1rem; }
+.closes-line.expired { color: var(--danger); }
+.field { margin-bottom: 1rem; }
+.field label { display: block; font-size: .78rem; color: var(--muted); margin-bottom: .35rem; }
+.field input {
+  width: 100%; padding: .65rem .8rem; border: 1px solid var(--line); border-radius: 8px;
+  font-family: inherit; font-size: .95rem; background: var(--surface); color: var(--ink);
+}
+.field input:focus { outline: none; border-color: var(--tide); }
+.btn {
+  width: 100%; padding: .8rem; border-radius: 8px; border: none;
+  font-family: inherit; font-size: .95rem; font-weight: 600; cursor: pointer;
+  background: var(--tide); color: #fff; transition: background .15s;
+}
+.btn:hover { background: var(--tide-lt); }
+.btn:disabled { background: var(--line); color: var(--muted); cursor: not-allowed; }
+.msg { font-size: .85rem; padding: .65rem .8rem; border-radius: 8px; margin-bottom: 1rem; display: none; }
+.msg.error { display: block; background: #F7E9E6; color: var(--danger); }
+.msg.success { display: block; background: #E8F0EE; color: var(--tide); }
+
+@media (max-width: 480px) {
+  .grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: .8rem; }
+}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <h1 id="siteName">Auctions</h1>
+  <span class="live-pill" id="livePill" style="display:none"><span class="live-dot"></span>Live now</span>
+</header>
+
+<main>
+  <div id="content">
+    <div class="empty-state"><strong>Loading…</strong></div>
+  </div>
+</main>
+
+<!-- ══════ BID MODAL ══════ -->
+<div class="modal-overlay" id="bidModal" onclick="if(event.target===this) closeModal()">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal()">✕</button>
+    <div id="modalImgWrap"></div>
+    <h2 id="modalItemName"></h2>
+    <p class="card-desc" id="modalItemDesc" style="margin:0 0 .8rem"></p>
+
+    <div class="current-bid-box">
+      <div>
+        <div class="card-bid-label">Current bid</div>
+        <div class="amount" id="modalCurrentBid">R0.00</div>
+      </div>
+      <div class="leader" id="modalLeader"></div>
+    </div>
+
+    <div class="closes-line" id="modalCloses" style="display:none"></div>
+    <div class="msg" id="modalMsg"></div>
+
+    <div class="field">
+      <label>Your name</label>
+      <input id="bidderName" type="text" placeholder="Your name">
+    </div>
+    <div class="field">
+      <label>WhatsApp number</label>
+      <input id="bidderPhone" type="tel" placeholder="083 123 4567">
+    </div>
+    <div class="field">
+      <label>Your bid (min <span id="modalMinBid">R0.00</span>)</label>
+      <input id="bidAmount" type="number" step="1">
+    </div>
+    <button class="btn" id="bidBtn" onclick="submitBid()">Place bid</button>
+  </div>
+</div>
+
+<script>
+const API = 'https://consignment-auctions-api.morneydeetlefs.workers.dev/api';
+
+let config = {};
+let auction = null;
+let items = [];
+let activeItem = null;
+
+function money(n) { return 'R' + Number(n).toFixed(2); }
+function esc(s) { return String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function imgUrl(key) { return key ? `${API}/images/${key}` : null; }
+
+function closesLabel(item) {
+  if (!item.end_date) return null;
+  const d = new Date(item.end_date);
+  if (isNaN(d.getTime())) return null;
+  return d.toLocaleDateString('en-ZA', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+}
+function isExpired(item) {
+  if (!item.end_date) return false;
+  const d = new Date(item.end_date);
+  return !isNaN(d.getTime()) && new Date() > d;
+}
+function deliveryLabel(m) {
+  return { pickup: 'Local pickup', delivery: 'Delivery available', either: 'Pickup or delivery' }[m] || 'Local pickup';
+}
+
+// ── Bidder identity — simple, local only (no server-side bidder registry yet) ──
+function getBidder() {
+  let id = localStorage.getItem('bidderId');
+  if (!id) { id = 'BID-' + Math.random().toString(36).slice(2, 10); localStorage.setItem('bidderId', id); }
+  return {
+    id,
+    name: localStorage.getItem('bidderName') || '',
+    phone: localStorage.getItem('bidderPhone') || '',
+  };
+}
+function saveBidder(name, phone) {
+  localStorage.setItem('bidderName', name);
+  localStorage.setItem('bidderPhone', phone);
+}
+
+// ── Load & render ──────────────────────────────────────────
+async function init() {
+  try {
+    const cfgRes = await fetch(`${API}/config`);
+    const cfgData = await cfgRes.json();
+    config = cfgData.config || {};
+    document.getElementById('siteName').textContent = config.siteName || 'Auctions';
+    document.title = config.siteName || 'Auctions';
+  } catch (e) {}
+
+  await loadAuction();
+  setInterval(loadItems, 20000); // light polling to keep bids current
+}
+
+async function loadAuction() {
+  const res = await fetch(`${API}/auctions`);
+  const data = await res.json();
+  const auctions = (data.auctions || []).filter(a => a.status === 'live');
+  auction = auctions[0] || null;
+
+  const pill = document.getElementById('livePill');
+  if (!auction) {
+    pill.style.display = 'none';
+    document.getElementById('content').innerHTML = `
+      <div class="empty-state">
+        <strong>No live auction right now</strong>
+        Check back soon, or get in touch to hear when the next one opens.
+      </div>`;
+    return;
+  }
+  pill.style.display = 'inline-flex';
+  await loadItems();
+}
+
+async function loadItems() {
+  if (!auction) return;
+  const res = await fetch(`${API}/auctions/${auction.id}/items`);
+  const data = await res.json();
+  items = data.items || [];
+  render();
+  if (activeItem) {
+    const fresh = items.find(i => i.id === activeItem.id);
+    if (fresh) { activeItem = fresh; updateModalBidInfo(); }
+  }
+}
+
+function render() {
+  const wrap = document.getElementById('content');
+  if (!items.length) {
+    wrap.innerHTML = `
+      <h2 class="auction-title">${esc(auction.name)}</h2>
+      <div class="empty-state"><strong>No items listed yet</strong>Check back shortly.</div>`;
+    return;
+  }
+  wrap.innerHTML = `
+    <h2 class="auction-title">${esc(auction.name)}</h2>
+    <p class="auction-sub">${items.length} item${items.length === 1 ? '' : 's'} up for bidding</p>
+    <div class="grid">${items.map(itemCard).join('')}</div>`;
+}
+
+function itemCard(item) {
+  const expired = isExpired(item);
+  const effStatus = expired ? 'closed' : item.status;
+  const img = item.image_key
+    ? `<img class="card-img" src="${imgUrl(item.image_key)}" alt="${esc(item.name)}">`
+    : `<div class="card-img-ph">📦</div>`;
+  const closes = closesLabel(item);
+  const tags = [];
+  if (effStatus !== 'open') tags.push(`<span class="tag closed-tag">Closed</span>`);
+  else if (closes) tags.push(`<span class="tag closing">${esc(closes)}</span>`);
+  tags.push(`<span class="tag">${esc(deliveryLabel(item.delivery_method))}</span>`);
+
+  return `
+    <div class="card ${effStatus === 'open' ? '' : 'closed'}" onclick="openBid('${item.id}')">
+      ${img}
+      <div class="card-body">
+        <div class="card-name">${esc(item.name)}</div>
+        <div class="card-desc">${esc(item.description || '')}</div>
+        <div class="card-tags">${tags.join('')}</div>
+        <div class="card-meta">
+          <span class="card-bid-label">Current bid</span>
+          <span class="card-bid-amount">${money(item.current_bid)}</span>
+        </div>
+      </div>
+    </div>`;
+}
+
+// ── Bid modal ──────────────────────────────────────────────
+function openBid(itemId) {
+  activeItem = items.find(i => i.id === itemId);
+  if (!activeItem || (activeItem.status !== 'open') || isExpired(activeItem)) return;
+
+  const bidder = getBidder();
+  document.getElementById('bidderName').value = bidder.name;
+  document.getElementById('bidderPhone').value = bidder.phone;
+  document.getElementById('modalItemName').textContent = activeItem.name;
+  document.getElementById('modalItemDesc').textContent = activeItem.description || '';
+  document.getElementById('modalImgWrap').innerHTML = activeItem.image_key
+    ? `<img class="modal-img" src="${imgUrl(activeItem.image_key)}" alt="">` : '';
+  document.getElementById('modalMsg').className = 'msg';
+  document.getElementById('modalMsg').textContent = '';
+
+  updateModalBidInfo();
+  document.getElementById('bidModal').classList.add('open');
+}
+
+function updateModalBidInfo() {
+  if (!activeItem) return;
+  document.getElementById('modalCurrentBid').textContent = money(activeItem.current_bid);
+  document.getElementById('modalLeader').textContent = activeItem.highest_bidder_name
+    ? `Leading: ${activeItem.highest_bidder_name}` : 'No bids yet';
+
+  const minBid = Number(activeItem.current_bid) + Number(activeItem.min_increment);
+  document.getElementById('modalMinBid').textContent = money(minBid);
+  const amountInput = document.getElementById('bidAmount');
+  amountInput.value = minBid.toFixed(2);
+  amountInput.min = minBid;
+  amountInput.step = Number(activeItem.min_increment) || 1;
+
+  const closesEl = document.getElementById('modalCloses');
+  const label = closesLabel(activeItem);
+  const expired = isExpired(activeItem);
+  if (label) {
+    closesEl.style.display = 'block';
+    closesEl.textContent = expired ? `Bidding closed — ${label}` : `Closes ${label}`;
+    closesEl.className = 'closes-line' + (expired ? ' expired' : '');
+  } else {
+    closesEl.style.display = 'none';
+  }
+  document.getElementById('bidBtn').disabled = expired;
+  document.getElementById('bidBtn').textContent = expired ? 'Bidding closed' : 'Place bid';
+}
+
+function closeModal() {
+  document.getElementById('bidModal').classList.remove('open');
+  activeItem = null;
+}
+
+async function submitBid() {
+  if (!activeItem) return;
+  const name = document.getElementById('bidderName').value.trim();
+  const phone = document.getElementById('bidderPhone').value.trim();
+  const amount = parseFloat(document.getElementById('bidAmount').value);
+  const msgEl = document.getElementById('modalMsg');
+
+  if (!name || !phone) { msgEl.className = 'msg error'; msgEl.textContent = 'Please enter your name and WhatsApp number.'; return; }
+  if (!amount || amount <= 0) { msgEl.className = 'msg error'; msgEl.textContent = 'Enter a valid bid amount.'; return; }
+
+  saveBidder(name, phone);
+  const bidder = getBidder();
+  const btn = document.getElementById('bidBtn');
+  btn.disabled = true; btn.textContent = 'Placing bid…';
+
+  try {
+    const res = await fetch(`${API}/items/${activeItem.id}/bid`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ bidderId: bidder.id, bidderName: name, amount }),
+    });
+    const data = await res.json();
+    if (!data.ok) {
+      msgEl.className = 'msg error'; msgEl.textContent = data.error || 'Could not place bid.';
+      btn.disabled = false; btn.textContent = 'Place bid';
+      if (res.status === 409) await loadItems(); // refresh so the new current bid shows
+      return;
+    }
+    msgEl.className = 'msg success'; msgEl.textContent = 'Bid placed! You\u2019re the leading bidder.';
+    btn.disabled = false; btn.textContent = 'Place bid';
+    await loadItems();
+  } catch (e) {
+    msgEl.className = 'msg error'; msgEl.textContent = 'Network error — please try again.';
+    btn.disabled = false; btn.textContent = 'Place bid';
+  }
+}
+
+init();
+</script>
+</body>
+</html>

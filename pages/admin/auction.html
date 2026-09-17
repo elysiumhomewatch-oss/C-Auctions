@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Auction — C-Auctions Admin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Work+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="shared.css">
+<style>
+.modal-bg{position:fixed;inset:0;background:rgba(43,38,33,.4);display:none;align-items:center;justify-content:center;z-index:100;padding:20px;}
+.modal-bg.show{display:flex;}
+.modal{background:#fff;border-radius:var(--radius);padding:22px 24px;max-width:480px;width:100%;max-height:80vh;overflow-y:auto;}
+.modal h2{margin-top:0;}
+.reserve-note{font-size:12px;color:var(--ink-400);}
+</style>
+</head>
+<body>
+<div class="shell">
+  <div id="nav-slot"></div>
+  <main>
+    <div class="page-head">
+      <div>
+        <h1 id="auction-name">Loading…</h1>
+        <div class="sub"><a href="auctions.html">← All auctions</a></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Auction settings</h2>
+      <div class="field-row3">
+        <div class="field">
+          <label for="e-status">Status</label>
+          <select id="e-status">
+            <option value="draft">Draft</option>
+            <option value="live">Live</option>
+            <option value="closed">Closed</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="e-commission">Default commission %</label>
+          <input type="number" id="e-commission" step="0.5">
+        </div>
+        <div class="field">
+          <label for="e-ends">Ends (informational)</label>
+          <input type="datetime-local" id="e-ends">
+        </div>
+      </div>
+      <button onclick="saveAuctionSettings()">Save settings</button>
+    </div>
+
+    <div class="page-head" style="margin-top:6px;">
+      <h2 style="margin:0;font-size:16px;">Items</h2>
+      <button onclick="openItemForm()">+ Add item</button>
+    </div>
+
+    <div class="card" id="item-form" style="display:none;">
+      <h2 id="item-form-title">New item</h2>
+      <input type="hidden" id="i-editing-id">
+      <div class="field-row">
+        <div class="field">
+          <label for="i-seller">Seller *</label>
+          <select id="i-seller"></select>
+        </div>
+        <div class="field">
+          <label for="i-name">Item name *</label>
+          <input type="text" id="i-name" placeholder="Weber Kettle Braai">
+        </div>
+      </div>
+      <div class="field">
+        <label for="i-desc">Description</label>
+        <textarea id="i-desc"></textarea>
+      </div>
+      <div class="field-row3">
+        <div class="field">
+          <label for="i-starting">Starting bid *</label>
+          <input type="number" id="i-starting" step="1">
+        </div>
+        <div class="field">
+          <label for="i-reserve">Reserve price</label>
+          <input type="number" id="i-reserve" step="1" placeholder="optional">
+        </div>
+        <div class="field">
+          <label for="i-increment">Min increment</label>
+          <input type="number" id="i-increment" step="1" value="1">
+        </div>
+      </div>
+      <div class="field-row3">
+        <div class="field">
+          <label for="i-end">End date</label>
+          <input type="datetime-local" id="i-end">
+        </div>
+        <div class="field">
+          <label for="i-commission">Commission % override</label>
+          <input type="number" id="i-commission" step="0.5" placeholder="uses auction default">
+        </div>
+        <div class="field">
+          <label for="i-delivery">Delivery</label>
+          <select id="i-delivery">
+            <option value="pickup">Pickup</option>
+            <option value="delivery">Delivery</option>
+            <option value="either">Either</option>
+          </select>
+        </div>
+      </div>
+      <div class="field">
+        <label for="i-image">Photo</label>
+        <input type="file" id="i-image" accept="image/*">
+        <div class="hint" id="i-current-image"></div>
+      </div>
+      <button onclick="submitItem()" id="item-submit-btn">Save item</button>
+      <button class="secondary" onclick="closeItemForm()">Cancel</button>
+    </div>
+
+    <div class="card">
+      <table>
+        <thead>
+          <tr><th>Item</th><th>Seller</th><th>Current bid</th><th>Reserve</th><th>Status</th><th>Ends</th><th></th></tr>
+        </thead>
+        <tbody id="items-body"><tr class="empty-row"><td colspan="7">Loading…</td></tr></tbody>
+      </table>
+    </div>
+  </main>
+</div>
+
+<div class="modal-bg" id="bids-modal">
+  <div class="modal">
+    <h2 id="bids-modal-title">Bid history</h2>
+    <table>
+      <thead><tr><th>Bidder</th><th>Amount</th><th>Placed</th></tr></thead>
+      <tbody id="bids-body"></tbody>
+    </table>
+    <button class="secondary" style="margin-top:14px;" onclick="closeBidsModal()">Close</button>
+  </div>
+</div>
+
+<script src="shared.js"></script>
+<script>
+requireAuth();
+renderNav('auctions.html');
+
+const params = new URLSearchParams(location.search);
+const auctionId = params.get('id');
+if (!auctionId) location.href = 'auctions.html';
+
+let sellersCache = [];
+let itemsCache = [];
+
+function openItemForm(editItem) {
+  document.getElementById('item-form').style.display = 'block';
+  if (editItem) {
+    document.getElementById('item-form-title').textContent = 'Edit item';
+    document.getElementById('item-submit-btn').textContent = 'Save changes';
+    document.getElementById('i-editing-id').value = editItem.id;
+    document.getElementById('i-seller').value = editItem.seller_id;
+    document.getElementById('i-name').value = editItem.name;
+    document.getElementById('i-desc').value = editItem.description || '';
+    document.getElementById('i-starting').value = editItem.starting_bid;
+    document.getElementById('i-reserve').value = editItem.reserve_price ?? '';
+    document.getElementById('i-increment').value = editItem.min_increment;
+    document.getElementById('i-end').value = toLocalInput(editItem.end_date);
+    document.getElementById('i-commission').value = editItem.commission_pct ?? '';
+    document.getElementById('i-delivery').value = editItem.delivery_method || 'pickup';
+    document.getElementById('i-current-image').textContent = editItem.image_key
+      ? 'Current photo set — choose a new file only to replace it.' : 'No photo set yet.';
+  } else {
+    document.getElementById('item-form-title').textContent = 'New item';
+    document.getElementById('item-submit-btn').textContent = 'Save item';
+    ['i-editing-id','i-name','i-desc','i-starting','i-reserve','i-commission'].forEach(id => document.getElementById(id).value = '');
+    document.getElementById('i-increment').value = 1;
+    document.getElementById('i-end').value = '';
+    document.getElementById('i-delivery').value = 'pickup';
+    document.getElementById('i-current-image').textContent = '';
+  }
+  document.getElementById('i-image').value = '';
+  document.getElementById('item-form').scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+function closeItemForm() { document.getElementById('item-form').style.display = 'none'; }
+
+function toLocalInput(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  const pad = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+const loadAuction = guard(async () => {
+  const { auctions } = await api('/auctions');
+  const auction = auctions.find(a => a.id === auctionId);
+  if (!auction) { toast('Auction not found', 'error'); return; }
+  document.getElementById('auction-name').textContent = auction.name;
+  document.getElementById('e-status').value = auction.status;
+  document.getElementById('e-commission').value = auction.commission_pct;
+  document.getElementById('e-ends').value = toLocalInput(auction.ends_at);
+});
+
+const saveAuctionSettings = guard(async () => {
+  const endsLocal = document.getElementById('e-ends').value;
+  await api(`/auctions/${auctionId}`, {
+    method: 'PATCH',
+    body: {
+      status: document.getElementById('e-status').value,
+      commissionPct: Number(document.getElementById('e-commission').value),
+      endsAt: endsLocal ? new Date(endsLocal).toISOString() : null,
+    },
+  });
+  toast('Auction settings saved', 'success');
+});
+
+const loadSellers = guard(async () => {
+  const { sellers } = await api('/sellers');
+  sellersCache = sellers;
+  document.getElementById('i-seller').innerHTML = sellers.length
+    ? sellers.map(s => `<option value="${s.id}">${escapeHtml(s.name)}</option>`).join('')
+    : `<option value="">Add a seller first</option>`;
+});
+
+const loadItems = guard(async () => {
+  const { items } = await api(`/auctions/${auctionId}/items`);
+  itemsCache = items;
+  const body = document.getElementById('items-body');
+  if (!items.length) {
+    body.innerHTML = `<tr class="empty-row"><td colspan="7">No items yet — add one above.</td></tr>`;
+    return;
+  }
+  body.innerHTML = items.map(it => {
+    const seller = sellersCache.find(s => s.id === it.seller_id);
+    const reserveMet = it.reserve_price == null || it.current_bid >= it.reserve_price;
+    return `
+      <tr>
+        <td>
+          <div class="item-name-cell">
+            <img class="thumb" src="${it.image_key ? imageUrl(it.image_key) : ''}" onerror="this.style.visibility='hidden'">
+            <span><strong>${escapeHtml(it.name)}</strong><br><a href="#" onclick="viewBids('${it.id}','${escapeHtml(it.name)}');return false;" class="muted" style="font-size:12px;">Bid history →</a></span>
+          </div>
+        </td>
+        <td>${escapeHtml(seller ? seller.name : it.seller_id)}</td>
+        <td class="tabular"><strong>${formatMoney(it.current_bid)}</strong>${it.highest_bidder_name ? `<div class="muted" style="font-size:12px;">${escapeHtml(it.highest_bidder_name)}</div>` : ''}</td>
+        <td class="tabular reserve-note">${it.reserve_price != null ? formatMoney(it.reserve_price) + (reserveMet ? ' ✓ met' : ' — not met') : 'no reserve'}</td>
+        <td>${statusDot(it.status)}</td>
+        <td class="muted">${formatDate(it.end_date)}</td>
+        <td>
+          <button class="small secondary" onclick='openItemForm(${JSON.stringify(it).replace(/'/g,"&#39;")})'>Edit</button>
+          ${it.status === 'open' ? `<button class="small" onclick="closeItem('${it.id}','${escapeHtml(it.name)}')">Close</button>` : ''}
+        </td>
+      </tr>
+    `;
+  }).join('');
+});
+
+const submitItem = guard(async () => {
+  const editingId = document.getElementById('i-editing-id').value;
+  const sellerId = document.getElementById('i-seller').value;
+  const name = document.getElementById('i-name').value.trim();
+  const startingBid = document.getElementById('i-starting').value;
+  if (!editingId && (!sellerId || !name || startingBid === '')) {
+    return toast('Seller, name and starting bid are required', 'error');
+  }
+  if (editingId && !name) return toast('Name is required', 'error');
+
+  let imageKey;
+  const file = document.getElementById('i-image').files[0];
+  if (file) {
+    const form = new FormData();
+    form.append('file', file);
+    const up = await api('/images', { method: 'POST', body: form, isForm: true });
+    imageKey = up.imageKey;
+  }
+
+  const endLocal = document.getElementById('i-end').value;
+  const body = {
+    name,
+    description: document.getElementById('i-desc').value,
+    startingBid: Number(startingBid),
+    reservePrice: document.getElementById('i-reserve').value !== '' ? Number(document.getElementById('i-reserve').value) : null,
+    minIncrement: Number(document.getElementById('i-increment').value) || 1,
+    endDate: endLocal ? new Date(endLocal).toISOString() : null,
+    commissionPct: document.getElementById('i-commission').value !== '' ? Number(document.getElementById('i-commission').value) : null,
+    deliveryMethod: document.getElementById('i-delivery').value,
+  };
+  if (imageKey) body.imageKey = imageKey;
+
+  if (editingId) {
+    await api(`/items/${editingId}`, { method: 'PATCH', body });
+    toast('Item updated', 'success');
+  } else {
+    await api('/items', { method: 'POST', body: { ...body, auctionId, sellerId } });
+    toast('Item added', 'success');
+  }
+  closeItemForm();
+  loadItems();
+});
+
+const closeItem = guard(async (itemId, name) => {
+  if (!confirm(`Close bidding on "${name}"? This locks it in as sold or unsold and cannot be undone.`)) return;
+  const res = await api(`/items/${itemId}/close`, { method: 'POST' });
+  toast(`Item closed — ${res.result}`, res.result === 'sold' ? 'success' : '');
+  loadItems();
+});
+
+const viewBids = guard(async (itemId, name) => {
+  document.getElementById('bids-modal-title').textContent = `Bid history — ${name}`;
+  const { bids } = await api(`/items/${itemId}/bids`);
+  document.getElementById('bids-body').innerHTML = bids.length
+    ? bids.map(b => `<tr><td>${escapeHtml(b.bidder_name)}</td><td class="tabular">${formatMoney(b.amount)}</td><td class="muted">${formatDate(b.placed_at)}</td></tr>`).join('')
+    : `<tr class="empty-row"><td colspan="3">No bids yet.</td></tr>`;
+  document.getElementById('bids-modal').classList.add('show');
+});
+function closeBidsModal() { document.getElementById('bids-modal').classList.remove('show'); }
+
+(async () => {
+  await loadSellers();
+  await loadAuction();
+  await loadItems();
+})();
+</script>
+</body>
+</html>

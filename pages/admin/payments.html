@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Payments & Payouts — C-Auctions Admin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Work+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="shared.css">
+</head>
+<body>
+<div class="shell">
+  <div id="nav-slot"></div>
+  <main>
+    <div class="page-head">
+      <div>
+        <h1>Payments &amp; payouts</h1>
+        <div class="sub">Money coming in from buyers, and money owed out to sellers.</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Payments awaiting collection</h2>
+      <div class="hint" style="margin-bottom:10px;">Created automatically when an item is closed as sold. Mark one paid once you've received the buyer's money (EFT, cash, or PayFast once it's live).</div>
+      <table>
+        <thead><tr><th>Item</th><th>Seller</th><th>Amount</th><th>Commission</th><th>Seller due</th><th></th></tr></thead>
+        <tbody id="pending-payments-body"><tr class="empty-row"><td colspan="6">Loading…</td></tr></tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <h2>Owed to sellers</h2>
+      <div class="hint" style="margin-bottom:10px;">Only payments already marked paid, and not yet included in a payout, appear here. Select the sales to bundle into one payout per seller.</div>
+      <div id="payouts-pending"><p class="muted">Loading…</p></div>
+    </div>
+
+    <div class="card">
+      <h2>Payout history</h2>
+      <table>
+        <thead><tr><th>Seller</th><th>Amount</th><th>Status</th><th>Created</th><th></th></tr></thead>
+        <tbody id="payout-history-body"><tr class="empty-row"><td colspan="5">Loading…</td></tr></tbody>
+      </table>
+    </div>
+  </main>
+</div>
+
+<script src="shared.js"></script>
+<script>
+requireAuth();
+renderNav('payments.html');
+
+const loadPendingPayments = guard(async () => {
+  const { payments } = await api('/payments?status=pending');
+  const body = document.getElementById('pending-payments-body');
+  if (!payments.length) {
+    body.innerHTML = `<tr class="empty-row"><td colspan="6">Nothing awaiting collection.</td></tr>`;
+    return;
+  }
+  body.innerHTML = payments.map(p => `
+    <tr>
+      <td><strong>${escapeHtml(p.item_name)}</strong></td>
+      <td>${escapeHtml(p.seller_name)}</td>
+      <td class="tabular">${formatMoney(p.amount)}</td>
+      <td class="tabular muted">${formatMoney(p.commission)}</td>
+      <td class="tabular">${formatMoney(p.seller_due)}</td>
+      <td><button class="small" onclick="markPaid('${p.id}','${escapeHtml(p.item_name)}')">Mark paid</button></td>
+    </tr>
+  `).join('');
+});
+
+const markPaid = guard(async (paymentId, name) => {
+  if (!confirm(`Confirm you've received payment for "${name}"?`)) return;
+  await api(`/payments/${paymentId}/mark-paid`, { method: 'POST', body: {} });
+  toast('Payment marked as received', 'success');
+  loadPendingPayments();
+  loadPendingPayouts();
+});
+
+const loadPendingPayouts = guard(async () => {
+  const { sellers } = await api('/payouts/pending');
+  const wrap = document.getElementById('payouts-pending');
+  if (!sellers.length) {
+    wrap.innerHTML = `<p class="muted">No sellers currently owed money.</p>`;
+    return;
+  }
+  wrap.innerHTML = sellers.map(sel => `
+    <div style="border:1px solid var(--stone-200);border-radius:8px;padding:14px 16px;margin-bottom:12px;">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;">
+        <strong>${escapeHtml(sel.sellerName)}</strong>
+        <span class="tabular">${formatMoney(sel.total)} total</span>
+      </div>
+      ${sel.payments.map(p => `
+        <div class="checkbox-row" style="padding:4px 0;">
+          <input type="checkbox" class="payout-check" data-seller="${sel.sellerId}" data-payment="${p.paymentId}" data-due="${p.sellerDue}" checked>
+          <span>${escapeHtml(p.itemName)} — <span class="tabular">${formatMoney(p.sellerDue)}</span></span>
+        </div>
+      `).join('')}
+      <button class="small" style="margin-top:8px;" onclick="createPayout('${sel.sellerId}','${escapeHtml(sel.sellerName)}')">Record payout for selected</button>
+    </div>
+  `).join('');
+});
+
+const createPayout = guard(async (sellerId, sellerName) => {
+  const checks = [...document.querySelectorAll(`.payout-check[data-seller="${sellerId}"]:checked`)];
+  if (!checks.length) return toast('Select at least one sale to include', 'error');
+  const paymentIds = checks.map(c => c.dataset.payment);
+  const total = checks.reduce((s, c) => s + Number(c.dataset.due), 0);
+  if (!confirm(`Record a payout of ${formatMoney(total)} to ${sellerName}? This just logs that you're about to pay them — it doesn't move money.`)) return;
+  await api('/payouts', { method: 'POST', body: { sellerId, paymentIds } });
+  toast('Payout recorded', 'success');
+  loadPendingPayouts();
+  loadPayoutHistory();
+});
+
+const loadPayoutHistory = guard(async () => {
+  const { payouts } = await api('/payouts');
+  const body = document.getElementById('payout-history-body');
+  if (!payouts.length) {
+    body.innerHTML = `<tr class="empty-row"><td colspan="5">No payouts recorded yet.</td></tr>`;
+    return;
+  }
+  body.innerHTML = payouts.map(po => `
+    <tr>
+      <td>${escapeHtml(po.seller_name)}</td>
+      <td class="tabular">${formatMoney(po.total_amount)}</td>
+      <td>${statusDot(po.status)}</td>
+      <td class="muted">${formatDate(po.created_at)}</td>
+      <td>${po.status !== 'paid' ? `<button class="small" onclick="markPayoutSent('${po.id}','${escapeHtml(po.seller_name)}')">Mark sent</button>` : ''}</td>
+    </tr>
+  `).join('');
+});
+
+const markPayoutSent = guard(async (payoutId, sellerName) => {
+  if (!confirm(`Confirm you've actually sent this money to ${sellerName}?`)) return;
+  await api(`/payouts/${payoutId}/mark-paid`, { method: 'POST' });
+  toast('Payout marked sent', 'success');
+  loadPayoutHistory();
+});
+
+loadPendingPayments();
+loadPendingPayouts();
+loadPayoutHistory();
+</script>
+</body>
+</html>

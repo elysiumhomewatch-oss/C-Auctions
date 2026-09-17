@@ -2,6 +2,17 @@
 // Consignment Auction Platform — Worker API
 // D1 for data, Backblaze B2 (native API, private bucket) for images
 // ═══════════════════════════════════════════════════════════════
+//
+// CHANGELOG (admin-panel support, added on top of the tested v1 API):
+//   - PATCH /auctions/:id          — edit an auction (status draft→live→closed, etc.)
+//   - GET   /items/:id/bids        — bid history for one item (admin)
+//   - GET   /payments              — list payments, optional ?status= filter (admin)
+//   - POST  /payments/:id/mark-paid — mark a buyer payment received (admin)
+//   - GET   /payouts/pending       — per-seller pending payout totals (admin)
+//   - POST  /payouts               — record a payout to a seller (admin)
+//   - GET   /payouts               — payout history (admin)
+//   - POST  /payouts/:id/mark-paid — mark a payout as actually sent (admin)
+// Everything above this changelog is unchanged from the tested version.
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -99,15 +110,27 @@ export default {
       if (parts[0] === 'sellers' && method === 'GET' && parts[1]) return getSeller(parts[1], env);
 
       // ── auctions ──
-      if (parts[0] === 'auctions' && method === 'POST') return createAuction(request, env);
+      if (parts[0] === 'auctions' && method === 'POST' && !parts[1]) return createAuction(request, env);
       if (parts[0] === 'auctions' && method === 'GET' && !parts[1]) return listAuctions(request, env);
+      if (parts[0] === 'auctions' && method === 'PATCH' && parts[1] && !parts[2]) return updateAuction(parts[1], request, env);
       if (parts[0] === 'auctions' && parts[2] === 'items' && method === 'GET') return listItems(parts[1], env);
 
       // ── items ──
-      if (parts[0] === 'items' && method === 'POST') return createItem(request, env);
-      if (parts[0] === 'items' && method === 'PATCH' && parts[1]) return updateItem(parts[1], request, env);
+      if (parts[0] === 'items' && method === 'POST' && !parts[1]) return createItem(request, env);
+      if (parts[0] === 'items' && method === 'PATCH' && parts[1] && !parts[2]) return updateItem(parts[1], request, env);
       if (parts[0] === 'items' && parts[2] === 'bid' && method === 'POST') return placeBid(parts[1], request, env);
       if (parts[0] === 'items' && parts[2] === 'close' && method === 'POST') return closeItem(parts[1], request, env);
+      if (parts[0] === 'items' && parts[2] === 'bids' && method === 'GET') return listBids(parts[1], request, env);
+
+      // ── payments ──
+      if (parts[0] === 'payments' && method === 'GET' && !parts[1]) return listPayments(request, env);
+      if (parts[0] === 'payments' && parts[2] === 'mark-paid' && method === 'POST') return markPaymentPaid(parts[1], request, env);
+
+      // ── payouts ──
+      if (parts[0] === 'payouts' && parts[1] === 'pending' && method === 'GET') return payoutsPending(request, env);
+      if (parts[0] === 'payouts' && method === 'POST' && !parts[1]) return createPayout(request, env);
+      if (parts[0] === 'payouts' && method === 'GET' && !parts[1]) return listPayouts(request, env);
+      if (parts[0] === 'payouts' && parts[2] === 'mark-paid' && method === 'POST') return markPayoutPaid(parts[1], request, env);
 
       // ── images ──
       if (parts[0] === 'images' && method === 'POST') return uploadImage(request, env);
@@ -173,6 +196,23 @@ async function createAuction(request, env) {
 async function listAuctions(request, env) {
   const rows = await env.DB.prepare('SELECT * FROM auctions ORDER BY created_at DESC').all();
   return json({ ok: true, auctions: rows.results });
+}
+async function updateAuction(auctionId, request, env) {
+  if (!requireAdmin(request, env)) return err('Unauthorized', 401);
+  const b = await request.json();
+  const fields = {
+    name: 'name', status: 'status', starts_at: 'startsAt',
+    ends_at: 'endsAt', commission_pct: 'commissionPct',
+  };
+  const sets = [], vals = [];
+  for (const [col, key] of Object.entries(fields)) {
+    if (b[key] !== undefined) { sets.push(`${col} = ?`); vals.push(b[key]); }
+  }
+  if (!sets.length) return err('Nothing to update');
+  vals.push(auctionId);
+  const res = await env.DB.prepare(`UPDATE auctions SET ${sets.join(', ')} WHERE id = ?`).bind(...vals).run();
+  if (!res.meta.changes) return err('Auction not found', 404);
+  return json({ ok: true });
 }
 
 // ── Items ──────────────────────────────────────────────────────
@@ -255,6 +295,12 @@ async function placeBid(itemId, request, env) {
   return json({ ok: true });
 }
 
+async function listBids(itemId, request, env) {
+  if (!requireAdmin(request, env)) return err('Unauthorized', 401);
+  const rows = await env.DB.prepare('SELECT * FROM bids WHERE item_id = ? ORDER BY placed_at DESC').bind(itemId).all();
+  return json({ ok: true, bids: rows.results });
+}
+
 async function closeItem(itemId, request, env) {
   if (!requireAdmin(request, env)) return err('Unauthorized', 401);
   const item = await env.DB.prepare('SELECT * FROM items WHERE id = ?').bind(itemId).first();
@@ -276,6 +322,120 @@ async function closeItem(itemId, request, env) {
   return json({ ok: true, result: newStatus });
 }
 
+// ── Payments (buyer → platform) ───────────────────────────────
+async function listPayments(request, env) {
+  if (!requireAdmin(request, env)) return err('Unauthorized', 401);
+  const url = new URL(request.url);
+  const status = url.searchParams.get('status');
+  const base = `
+    SELECT p.*, i.name AS item_name, i.seller_id AS seller_id, s.name AS seller_name
+    FROM payments p
+    JOIN items i ON i.id = p.item_id
+    JOIN sellers s ON s.id = i.seller_id
+  `;
+  const rows = status
+    ? await env.DB.prepare(base + ' WHERE p.status = ? ORDER BY p.id DESC').bind(status).all()
+    : await env.DB.prepare(base + ' ORDER BY p.id DESC').all();
+  return json({ ok: true, payments: rows.results });
+}
+
+async function markPaymentPaid(paymentId, request, env) {
+  if (!requireAdmin(request, env)) return err('Unauthorized', 401);
+  let gatewayRef = null;
+  try { const b = await request.json(); gatewayRef = b.gatewayRef || null; } catch {}
+  const res = await env.DB.prepare(
+    `UPDATE payments SET status = 'paid', paid_at = datetime('now'), gateway_ref = COALESCE(?, gateway_ref)
+     WHERE id = ? AND status != 'paid'`
+  ).bind(gatewayRef, paymentId).run();
+  if (!res.meta.changes) return err('Payment not found, or already marked paid', 404);
+  return json({ ok: true });
+}
+
+// ── Payouts (platform → seller) ───────────────────────────────
+// A payment must be status='paid' (buyer has paid us) and not already referenced
+// in any existing payout's payment_ids JSON array before it can be paid out.
+async function payoutsPending(request, env) {
+  if (!requireAdmin(request, env)) return err('Unauthorized', 401);
+  const rows = await env.DB.prepare(`
+    SELECT p.id AS payment_id, p.item_id, p.amount, p.commission, p.seller_due,
+           i.name AS item_name, i.seller_id, s.name AS seller_name, s.phone AS seller_phone,
+           s.payout_method AS payout_method, s.bank_details AS bank_details
+    FROM payments p
+    JOIN items i ON i.id = p.item_id
+    JOIN sellers s ON s.id = i.seller_id
+    WHERE p.status = 'paid'
+      AND p.id NOT IN (
+        SELECT je.value FROM payouts po, json_each(po.payment_ids) je
+      )
+    ORDER BY s.name, p.id
+  `).all();
+
+  const bySeller = {};
+  for (const r of rows.results) {
+    if (!bySeller[r.seller_id]) {
+      bySeller[r.seller_id] = {
+        sellerId: r.seller_id, sellerName: r.seller_name, sellerPhone: r.seller_phone,
+        payoutMethod: r.payout_method, bankDetails: r.bank_details ? JSON.parse(r.bank_details) : null,
+        total: 0, payments: [],
+      };
+    }
+    bySeller[r.seller_id].total = Math.round((bySeller[r.seller_id].total + r.seller_due) * 100) / 100;
+    bySeller[r.seller_id].payments.push({
+      paymentId: r.payment_id, itemId: r.item_id, itemName: r.item_name,
+      amount: r.amount, commission: r.commission, sellerDue: r.seller_due,
+    });
+  }
+  return json({ ok: true, sellers: Object.values(bySeller) });
+}
+
+async function createPayout(request, env) {
+  if (!requireAdmin(request, env)) return err('Unauthorized', 401);
+  const b = await request.json();
+  if (!b.sellerId || !Array.isArray(b.paymentIds) || !b.paymentIds.length) {
+    return err('sellerId and a non-empty paymentIds array are required');
+  }
+  const placeholders = b.paymentIds.map(() => '?').join(',');
+  const rows = await env.DB.prepare(`
+    SELECT p.id, p.seller_due, i.seller_id
+    FROM payments p JOIN items i ON i.id = p.item_id
+    WHERE p.status = 'paid' AND p.id IN (${placeholders})
+      AND p.id NOT IN (SELECT je.value FROM payouts po, json_each(po.payment_ids) je)
+  `).bind(...b.paymentIds).all();
+
+  const valid = rows.results.filter(r => r.seller_id === b.sellerId);
+  if (!valid.length) return err('None of those payments are eligible for payout (already paid out, not found, or wrong seller)');
+  if (valid.length !== b.paymentIds.length) {
+    return err(`Only ${valid.length} of ${b.paymentIds.length} payments are eligible — refresh and try again`);
+  }
+
+  const total = Math.round(valid.reduce((sum, r) => sum + r.seller_due, 0) * 100) / 100;
+  const payoutId = id('PO');
+  await env.DB.prepare(
+    'INSERT INTO payouts (id, seller_id, payment_ids, total_amount, status) VALUES (?,?,?,?,?)'
+  ).bind(payoutId, b.sellerId, JSON.stringify(valid.map(r => r.id)), total, 'pending').run();
+
+  return json({ ok: true, id: payoutId, total });
+}
+
+async function listPayouts(request, env) {
+  if (!requireAdmin(request, env)) return err('Unauthorized', 401);
+  const rows = await env.DB.prepare(`
+    SELECT po.*, s.name AS seller_name
+    FROM payouts po JOIN sellers s ON s.id = po.seller_id
+    ORDER BY po.created_at DESC
+  `).all();
+  return json({ ok: true, payouts: rows.results });
+}
+
+async function markPayoutPaid(payoutId, request, env) {
+  if (!requireAdmin(request, env)) return err('Unauthorized', 401);
+  const res = await env.DB.prepare(
+    `UPDATE payouts SET status = 'paid', paid_at = datetime('now') WHERE id = ? AND status != 'paid'`
+  ).bind(payoutId).run();
+  if (!res.meta.changes) return err('Payout not found, or already marked paid', 404);
+  return json({ ok: true });
+}
+
 // ── Images (Backblaze B2, private bucket, proxied through this Worker) ──
 async function uploadImage(request, env) {
   if (!requireAdmin(request, env)) return err('Unauthorized', 401);
@@ -291,7 +451,10 @@ async function uploadImage(request, env) {
 
 async function serveImage(key, env) {
   const res = await b2Download(env, key);
-  if (!res.ok) return err('Image not found', 404);
+  if (!res.ok) {
+    const detail = await res.text().catch(() => '');
+    return err(`Image not found (B2 status ${res.status}): ${detail}`, 404);
+  }
   return new Response(res.body, {
     headers: {
       'Content-Type': res.headers.get('Content-Type') || 'image/jpeg',

@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Settings — C-Auctions Admin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Work+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="shared.css">
+</head>
+<body>
+<div class="shell">
+  <div id="nav-slot"></div>
+  <main class="narrow">
+    <div class="page-head">
+      <div>
+        <h1>Settings</h1>
+        <div class="sub">Public site configuration.</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Site config</h2>
+      <div id="config-fields"></div>
+      <div class="field-row" style="margin-top:6px;">
+        <div class="field">
+          <label for="new-key">New key</label>
+          <input type="text" id="new-key" placeholder="e.g. contactPhone">
+        </div>
+        <div class="field">
+          <label for="new-value">Value</label>
+          <input type="text" id="new-value">
+        </div>
+      </div>
+      <button class="secondary small" onclick="addRow()">+ Add key</button>
+      <div style="margin-top:16px;">
+        <button onclick="saveConfig()">Save all</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Admin key</h2>
+      <div class="hint">
+        The <code>ADMIN_KEY</code> Worker secret can't be changed from here — it's not stored in the database.
+        To rotate it: <code>npx wrangler secret put ADMIN_KEY</code> on the Worker, then log back in here with the new value.
+      </div>
+    </div>
+  </main>
+</div>
+
+<script src="shared.js"></script>
+<script>
+requireAuth();
+renderNav('config.html');
+
+let rowIndex = 0;
+function addFieldRow(key = '', value = '') {
+  const wrap = document.getElementById('config-fields');
+  const rowId = `cfg-row-${rowIndex++}`;
+  const div = document.createElement('div');
+  div.className = 'field-row';
+  div.id = rowId;
+  div.innerHTML = `
+    <div class="field"><input type="text" class="cfg-key" value="${escapeHtml(key)}" placeholder="key"></div>
+    <div class="field"><input type="text" class="cfg-value" value="${escapeHtml(value)}" placeholder="value"></div>
+  `;
+  wrap.appendChild(div);
+}
+function addRow() {
+  const k = document.getElementById('new-key').value.trim();
+  const v = document.getElementById('new-value').value.trim();
+  if (!k) return toast('Enter a key', 'error');
+  addFieldRow(k, v);
+  document.getElementById('new-key').value = '';
+  document.getElementById('new-value').value = '';
+}
+
+const load = guard(async () => {
+  const { config } = await api('/config', { auth: false });
+  document.getElementById('config-fields').innerHTML = '';
+  Object.entries(config).forEach(([k, v]) => addFieldRow(k, v));
+  if (!Object.keys(config).length) addFieldRow('siteName', '');
+});
+
+const saveConfig = guard(async () => {
+  const keys = [...document.querySelectorAll('.cfg-key')];
+  const values = [...document.querySelectorAll('.cfg-value')];
+  const body = {};
+  keys.forEach((k, i) => { if (k.value.trim()) body[k.value.trim()] = values[i].value; });
+  await api('/config', { method: 'POST', body });
+  toast('Settings saved', 'success');
+  load();
+});
+
+load();
+</script>
+</body>
+</html>

@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sellers — C-Auctions Admin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Work+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="shared.css">
+</head>
+<body>
+<div class="shell">
+  <div id="nav-slot"></div>
+  <main>
+    <div class="page-head">
+      <div>
+        <h1>Sellers</h1>
+        <div class="sub">People consigning items into your auctions.</div>
+      </div>
+      <button onclick="toggleForm()">+ Add seller</button>
+    </div>
+
+    <div class="card" id="add-form" style="display:none;">
+      <h2>New seller</h2>
+      <div class="field-row">
+        <div class="field">
+          <label for="s-name">Name *</label>
+          <input type="text" id="s-name" placeholder="Jane Seller">
+        </div>
+        <div class="field">
+          <label for="s-phone">Phone (WhatsApp) *</label>
+          <input type="tel" id="s-phone" placeholder="27821234567">
+        </div>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label for="s-email">Email</label>
+          <input type="email" id="s-email" placeholder="optional">
+        </div>
+        <div class="field">
+          <label for="s-payout">Payout method</label>
+          <select id="s-payout">
+            <option value="eft">EFT</option>
+            <option value="payfast_split">PayFast split (future)</option>
+          </select>
+        </div>
+      </div>
+      <div class="field-row3">
+        <div class="field">
+          <label for="s-bank-holder">Account holder</label>
+          <input type="text" id="s-bank-holder" placeholder="optional">
+        </div>
+        <div class="field">
+          <label for="s-bank-name">Bank</label>
+          <input type="text" id="s-bank-name" placeholder="optional">
+        </div>
+        <div class="field">
+          <label for="s-bank-branch">Branch code</label>
+          <input type="text" id="s-bank-branch" placeholder="optional">
+        </div>
+      </div>
+      <div class="field">
+        <label for="s-bank-acc">Account number</label>
+        <input type="text" id="s-bank-acc" placeholder="optional">
+      </div>
+      <button onclick="submitSeller()">Save seller</button>
+      <button class="secondary" onclick="toggleForm()">Cancel</button>
+    </div>
+
+    <div class="card">
+      <table>
+        <thead><tr><th>Name</th><th>Phone</th><th>Email</th><th>Payout</th><th>Added</th></tr></thead>
+        <tbody id="sellers-body"><tr class="empty-row"><td colspan="5">Loading…</td></tr></tbody>
+      </table>
+    </div>
+  </main>
+</div>
+
+<script src="shared.js"></script>
+<script>
+requireAuth();
+renderNav('sellers.html');
+
+function toggleForm() {
+  const f = document.getElementById('add-form');
+  f.style.display = f.style.display === 'none' ? 'block' : 'none';
+}
+
+const load = guard(async () => {
+  const { sellers } = await api('/sellers');
+  const body = document.getElementById('sellers-body');
+  if (!sellers.length) {
+    body.innerHTML = `<tr class="empty-row"><td colspan="5">No sellers yet — add one above.</td></tr>`;
+    return;
+  }
+  body.innerHTML = sellers.map(s => `
+    <tr>
+      <td><strong>${escapeHtml(s.name)}</strong></td>
+      <td>${escapeHtml(s.phone)}</td>
+      <td>${escapeHtml(s.email || '—')}</td>
+      <td><span class="badge">${escapeHtml(s.payout_method)}</span></td>
+      <td class="muted">${formatDate(s.created_at)}</td>
+    </tr>
+  `).join('');
+});
+
+const submitSeller = guard(async () => {
+  const name = document.getElementById('s-name').value.trim();
+  const phone = document.getElementById('s-phone').value.trim();
+  if (!name || !phone) return toast('Name and phone are required', 'error');
+
+  const holder = document.getElementById('s-bank-holder').value.trim();
+  const bank = document.getElementById('s-bank-name').value.trim();
+  const branch = document.getElementById('s-bank-branch').value.trim();
+  const acc = document.getElementById('s-bank-acc').value.trim();
+  const bankDetails = (holder || bank || branch || acc)
+    ? { accountHolder: holder, bank, branchCode: branch, accountNumber: acc }
+    : null;
+
+  await api('/sellers', {
+    method: 'POST',
+    body: {
+      name, phone,
+      email: document.getElementById('s-email').value.trim() || undefined,
+      payoutMethod: document.getElementById('s-payout').value,
+      bankDetails,
+    },
+  });
+  toast('Seller added', 'success');
+  toggleForm();
+  ['s-name','s-phone','s-email','s-bank-holder','s-bank-name','s-bank-branch','s-bank-acc']
+    .forEach(id => document.getElementById(id).value = '');
+  load();
+});
+
+load();
+</script>
+</body>
+</html>

@@ -5,7 +5,7 @@ compatibility_date = "2025-01-01"
 [[d1_databases]]
 binding = "DB"
 database_name = "consignment-auctions"
-database_id = "REPLACE_WITH_ID_FROM_D1_CREATE"
+database_id = "e7ccd970-1380-4d70-8d94-4229bc0a8fdb"
 
 # ── Secrets (never in this file — set with `wrangler secret put`) ──
 # ADMIN_KEY       — your login key for the admin dashboard

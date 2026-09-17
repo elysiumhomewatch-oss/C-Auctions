@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Auctions — C-Auctions Admin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Work+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="shared.css">
+</head>
+<body>
+<div class="shell">
+  <div id="nav-slot"></div>
+  <main>
+    <div class="page-head">
+      <div>
+        <h1>Auctions</h1>
+        <div class="sub">Each auction is one batch/event of lots.</div>
+      </div>
+      <button onclick="toggleForm()">+ New auction</button>
+    </div>
+
+    <div class="card" id="add-form" style="display:none;">
+      <h2>New auction</h2>
+      <div class="field">
+        <label for="a-name">Name *</label>
+        <input type="text" id="a-name" placeholder="October Auction">
+      </div>
+      <div class="field-row3">
+        <div class="field">
+          <label for="a-status">Status</label>
+          <select id="a-status">
+            <option value="draft">Draft</option>
+            <option value="live">Live</option>
+            <option value="closed">Closed</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="a-commission">Default commission %</label>
+          <input type="number" id="a-commission" value="15" step="0.5">
+        </div>
+        <div class="field">
+          <label for="a-ends">Ends (informational)</label>
+          <input type="datetime-local" id="a-ends">
+        </div>
+      </div>
+      <button onclick="submitAuction()">Create auction</button>
+      <button class="secondary" onclick="toggleForm()">Cancel</button>
+    </div>
+
+    <div class="card">
+      <table>
+        <thead><tr><th>Name</th><th>Status</th><th>Commission</th><th>Ends</th><th>Created</th><th></th></tr></thead>
+        <tbody id="auctions-body"><tr class="empty-row"><td colspan="6">Loading…</td></tr></tbody>
+      </table>
+    </div>
+  </main>
+</div>
+
+<script src="shared.js"></script>
+<script>
+requireAuth();
+renderNav('auctions.html');
+
+function toggleForm() {
+  const f = document.getElementById('add-form');
+  f.style.display = f.style.display === 'none' ? 'block' : 'none';
+}
+
+const load = guard(async () => {
+  const { auctions } = await api('/auctions');
+  const body = document.getElementById('auctions-body');
+  if (!auctions.length) {
+    body.innerHTML = `<tr class="empty-row"><td colspan="6">No auctions yet — create one above.</td></tr>`;
+    return;
+  }
+  body.innerHTML = auctions.map(a => `
+    <tr>
+      <td><strong>${escapeHtml(a.name)}</strong></td>
+      <td>${statusDot(a.status)}</td>
+      <td>${a.commission_pct}%</td>
+      <td class="muted">${formatDate(a.ends_at)}</td>
+      <td class="muted">${formatDate(a.created_at)}</td>
+      <td><a href="auction.html?id=${a.id}">Manage →</a></td>
+    </tr>
+  `).join('');
+});
+
+const submitAuction = guard(async () => {
+  const name = document.getElementById('a-name').value.trim();
+  if (!name) return toast('Name is required', 'error');
+  const endsLocal = document.getElementById('a-ends').value;
+  await api('/auctions', {
+    method: 'POST',
+    body: {
+      name,
+      status: document.getElementById('a-status').value,
+      commissionPct: Number(document.getElementById('a-commission').value) || 15,
+      endsAt: endsLocal ? new Date(endsLocal).toISOString() : undefined,
+    },
+  });
+  toast('Auction created', 'success');
+  toggleForm();
+  document.getElementById('a-name').value = '';
+  load();
+});
+
+load();
+</script>
+</body>
+</html>

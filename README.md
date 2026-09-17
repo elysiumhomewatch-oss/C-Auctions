@@ -1,79 +1,79 @@
-# Consignment Auctions — Backend Skeleton
+# C-Auctions Admin Panel — install notes
 
-Part 1 only for now (deploy steps) — this is just the API + database + image
-storage. No public/admin pages yet.
+## What's in here
+- `pages/admin/` — the admin panel (multi-page: dashboard, sellers, auctions,
+  per-auction item management + photo upload + live bids, payments & payouts,
+  settings). Drop this whole folder into your existing `pages/` directory so it
+  serves at `/admin/` alongside your public site.
+- `worker/index.js` — your existing Worker **plus** new routes the admin panel
+  needs (see below). This is the full file — replace your current
+  `worker/index.js` with it (or diff it against yours if you've since made
+  other changes).
 
-## What you need first
+## New Worker routes added
+Your schema already had `payments` and `payouts` tables, but no routes to use
+them — so "close/settle" wasn't actually possible yet. Added:
+- `PATCH /auctions/:id` — edit an auction (move draft → live → closed, etc.)
+- `GET /items/:id/bids` — bid history for one item
+- `GET /payments` (+ `?status=`) — list payments
+- `POST /payments/:id/mark-paid` — mark a buyer payment received
+- `GET /payouts/pending` — per-seller amounts owed, only counting payments
+  that are marked paid and not already in a previous payout
+- `POST /payouts` — record a payout to a seller
+- `GET /payouts` — payout history
+- `POST /payouts/:id/mark-paid` — mark a payout as actually sent
 
-1. A **Backblaze B2** account (backblaze.com — no card required) with:
-   - One **private** bucket created
-   - An application key scoped to that bucket (Account → App Keys → Add a New
-     Application Key)
-   - Note down: `keyID`, `applicationKey`, the bucket's **Bucket ID** and
-     **Bucket Name** (all visible on the bucket's page in the B2 dashboard)
+All of this is additive — nothing about your existing tested routes changed.
 
-## Deploy steps (Git Bash)
+## Install steps
 
-```bash
-cd worker
+1. Copy files in:
+   ```bash
+   cd D:\github\C-Auctions
+   cp -r <this-package>/pages/admin pages/admin
+   cp <this-package>/worker/index.js worker/index.js
+   ```
 
-# 1. Create the D1 database
-npx wrangler d1 create consignment-auctions
-# ⚠ copy the database_id it prints into wrangler.toml (REPLACE_WITH_ID_FROM_D1_CREATE)
+2. Redeploy the Worker:
+   ```bash
+   cd D:\github\C-Auctions\worker
+   npx wrangler deploy
+   ```
 
-# 2. Load the schema
-npx wrangler d1 execute consignment-auctions --remote --file=../db/schema.sql
+3. Redeploy Pages (same command you used for the public site — adjust the
+   project path/name if yours differs):
+   ```bash
+   cd D:\github\C-Auctions
+   npx wrangler pages deploy pages --project-name=c-auctions
+   ```
 
-# 3. Set secrets (you'll be prompted to paste each value)
-npx wrangler secret put ADMIN_KEY
-npx wrangler secret put B2_KEY_ID
-npx wrangler secret put B2_APP_KEY
-npx wrangler secret put B2_BUCKET_ID
-npx wrangler secret put B2_BUCKET_NAME
+4. Visit `https://c-auctions.pages.dev/admin/` and log in with your
+   `ADMIN_KEY`.
 
-# To generate a strong ADMIN_KEY instead of typing one:
-#   ADMIN_KEY=$(openssl rand -hex 24)
-#   echo "Save this now — you will need it: $ADMIN_KEY"
-#   echo "$ADMIN_KEY" | npx wrangler secret put ADMIN_KEY
+## Still worth doing (from the handoff doc, unchanged)
+- Change `ADMIN_KEY` off the `auctions2026` placeholder before real use —
+  `npx wrangler secret put ADMIN_KEY` from the worker directory, then log
+  into the admin panel again with the new value.
+- Commit & push — this adds more uncommitted files on top of the ones
+  already flagged.
+- Decide whether to keep or clear the test listing (Weber Kettle Braai etc.)
+  — do it from the Auctions page now, no D1 command needed: open the
+  September Auction, close the item, or just leave it as a first real test
+  of the close/settle flow end to end.
 
-# 4. Deploy
-npx wrangler deploy
-```
-
-Wrangler will print your Worker's URL, e.g.
-`https://consignment-auctions-api.<your-subdomain>.workers.dev`
-
-## Quick smoke test
-
-```bash
-# Should return {"ok":true,"config":{}}
-curl https://consignment-auctions-api.<your-subdomain>.workers.dev/api/config
-
-# Create a seller (replace YOUR_ADMIN_KEY)
-curl -X POST https://consignment-auctions-api.<your-subdomain>.workers.dev/api/sellers \
-  -H "Authorization: Bearer YOUR_ADMIN_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"name":"Test Seller","phone":"27831234567"}'
-```
-
-## API reference (current)
-
-| Method | Path | Auth | Purpose |
-|---|---|---|---|
-| GET | `/api/config` | — | Get public config values |
-| POST | `/api/config` | admin | Set config values (bulk key/value) |
-| POST | `/api/sellers` | admin | Add a seller |
-| GET | `/api/sellers` | admin | List sellers |
-| GET | `/api/sellers/:id` | — | Get one seller |
-| POST | `/api/auctions` | admin | Create an auction/event |
-| GET | `/api/auctions` | — | List auctions |
-| GET | `/api/auctions/:id/items` | — | List items in an auction |
-| POST | `/api/items` | admin | Add an item |
-| PATCH | `/api/items/:id` | admin | Edit an item |
-| POST | `/api/items/:id/bid` | — | Place a bid |
-| POST | `/api/items/:id/close` | admin | Close bidding, create payment record if sold |
-| POST | `/api/images` | admin | Upload an image (multipart `file` field) → returns `imageKey` |
-| GET | `/api/images/:key` | — | Stream an image from B2 |
-
-Not built yet: payments (PayFast), payouts, public/admin frontend pages,
-per-item delivery cost display. That's the next session.
+## Notes on the admin panel itself
+- Auth: paste your `ADMIN_KEY` on first visit to any admin page; it's stored
+  in that browser's localStorage and sent as a Bearer token on every admin
+  call. Log out clears it.
+- The visual style (warm stone background, teal accents, Space Grotesk +
+  Work Sans) is my best match to the direction you described for the public
+  site, not pulled from its actual CSS — if you paste me that stylesheet I
+  can tighten it to match exactly.
+- Status everywhere (auctions, items, payments, payouts) uses the same small
+  dot + label so you can scan state at a glance: outline = draft/unsold,
+  filled pulsing teal = live/open, filled green = sold/paid, filled clay =
+  pending, filled red outline = unsold/cancelled.
+- Payout math: a payment only shows up as "owed to seller" once you've
+  marked it paid (buyer's money received) — it disappears from that list the
+  moment you record a payout covering it, so the same sale can't accidentally
+  get paid out twice.

@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard — C-Auctions Admin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Work+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="shared.css">
+</head>
+<body>
+
+<div id="login-screen" class="login-wrap" style="display:none;">
+  <div class="brand">C-Auctions <span>Admin</span></div>
+  <div class="card">
+    <h2>Log in</h2>
+    <div class="field">
+      <label for="admin-key">Admin key</label>
+      <input type="password" id="admin-key" placeholder="Paste your ADMIN_KEY" autocomplete="off">
+    </div>
+    <button onclick="doLogin()" style="width:100%;justify-content:center;">Log in</button>
+    <div class="hint" style="margin-top:10px;">This is the Worker's <code>ADMIN_KEY</code> secret — stored only in this browser's local storage.</div>
+  </div>
+</div>
+
+<div id="app-screen" class="shell" style="display:none;">
+  <div id="nav-slot"></div>
+  <main>
+    <div class="page-head">
+      <div>
+        <h1>Dashboard</h1>
+        <div class="sub">Overview across sellers, auctions, and money in motion.</div>
+      </div>
+    </div>
+
+    <div class="grid-stats" id="stats"></div>
+
+    <div class="card">
+      <h2>Live auctions</h2>
+      <table>
+        <thead><tr><th>Auction</th><th>Status</th><th>Commission</th><th></th></tr></thead>
+        <tbody id="live-auctions-body"><tr class="empty-row"><td colspan="4">Loading…</td></tr></tbody>
+      </table>
+    </div>
+  </main>
+</div>
+
+<script src="shared.js"></script>
+<script>
+async function doLogin() {
+  const key = document.getElementById('admin-key').value.trim();
+  if (!key) return toast('Enter the admin key', 'error');
+  setKey(key);
+  try {
+    // Cheap authenticated call to verify the key actually works before committing to it.
+    await api('/sellers');
+    location.reload();
+  } catch (e) {
+    clearKey();
+    toast('That key was rejected — check ADMIN_KEY on the Worker', 'error');
+  }
+}
+
+const loadDashboard = guard(async () => {
+  renderNav('index.html');
+  const [sellersRes, auctionsRes, paymentsPendingRes, payoutsPendingRes] = await Promise.all([
+    api('/sellers'),
+    api('/auctions'),
+    api('/payments?status=pending'),
+    api('/payouts/pending'),
+  ]);
+
+  const sellers = sellersRes.sellers || [];
+  const auctions = auctionsRes.auctions || [];
+  const liveAuctions = auctions.filter(a => a.status === 'live');
+  const pendingPayments = paymentsPendingRes.payments || [];
+  const pendingPaymentsTotal = pendingPayments.reduce((s, p) => s + p.amount, 0);
+  const payoutsDue = (payoutsPendingRes.sellers || []);
+  const payoutsDueTotal = payoutsDue.reduce((s, sel) => s + sel.total, 0);
+
+  document.getElementById('stats').innerHTML = `
+    <a class="stat link" href="sellers.html"><div class="num">${sellers.length}</div><div class="label">Sellers</div></a>
+    <a class="stat link" href="auctions.html"><div class="num">${liveAuctions.length}</div><div class="label">Live auctions (${auctions.length} total)</div></a>
+    <a class="stat link" href="payments.html"><div class="num">${formatMoney(pendingPaymentsTotal)}</div><div class="label">Payments awaiting collection (${pendingPayments.length})</div></a>
+    <a class="stat link" href="payments.html"><div class="num">${formatMoney(payoutsDueTotal)}</div><div class="label">Owed to sellers (${payoutsDue.length} sellers)</div></a>
+  `;
+
+  const body = document.getElementById('live-auctions-body');
+  if (!liveAuctions.length) {
+    body.innerHTML = `<tr class="empty-row"><td colspan="4">No live auctions right now.</td></tr>`;
+  } else {
+    body.innerHTML = liveAuctions.map(a => `
+      <tr>
+        <td><strong>${escapeHtml(a.name)}</strong></td>
+        <td>${statusDot(a.status)}</td>
+        <td>${a.commission_pct}%</td>
+        <td><a href="auction.html?id=${a.id}">Manage →</a></td>
+      </tr>
+    `).join('');
+  }
+});
+
+if (getKey()) {
+  document.getElementById('app-screen').style.display = 'flex';
+  loadDashboard();
+} else {
+  document.getElementById('login-screen').style.display = 'block';
+}
+</script>
+</body>
+</html>
