@@ -113,7 +113,13 @@ export default {
       // ── sellers ──
       if (parts[0] === 'sellers' && method === 'POST') return createSeller(request, env);
       if (parts[0] === 'sellers' && method === 'GET' && !parts[1]) return listSellers(request, env);
-      if (parts[0] === 'sellers' && method === 'GET' && parts[1]) return getSeller(parts[1], env);
+      if (parts[0] === 'sellers' && method === 'GET' && parts[1] && !parts[2]) return getSeller(parts[1], env);
+      if (parts[0] === 'sellers' && method === 'PATCH' && parts[1] && !parts[2]) return updateSeller(parts[1], request, env);
+      if (parts[0] === 'sellers' && parts[2] === 'approve' && method === 'POST') return approveSeller(parts[1], request, env);
+
+      // ── public seller self-registration & portal ──
+      if (parts[0] === 'register' && method === 'POST') return registerSeller(request, env);
+      if (parts[0] === 'seller-portal' && parts[1] && method === 'GET') return sellerPortal(parts[1], env);
 
       // ── auctions ──
       if (parts[0] === 'auctions' && method === 'POST' && !parts[1]) return createAuction(request, env);
@@ -595,4 +601,128 @@ async function confirmCollection(pin, request, env) {
   ).bind(now, pin, token.payment_id).run();
 
   return json({ ok: true, alreadyCollected: false, collectedAt: now });
+}
+
+// ── Seller self-registration & portal ──────────────────────────
+
+// Public — anyone can submit; creates seller with status='pending'
+async function registerSeller(request, env) {
+  const b = await request.json();
+  if (!b.name || !b.phone) return err('name and phone are required');
+
+  // Normalise phone — strip spaces/dashes, ensure starts with 27
+  let phone = b.phone.replace(/[\s\-()]/g, '');
+  if (phone.startsWith('0')) phone = '27' + phone.slice(1);
+  if (!phone.startsWith('27')) phone = '27' + phone;
+
+  // Duplicate check
+  const existing = await env.DB.prepare(
+    'SELECT id, status FROM sellers WHERE phone = ?'
+  ).bind(phone).first();
+  if (existing) {
+    if (existing.status === 'pending') {
+      return json({ ok: true, alreadyPending: true, message: 'Your registration is already submitted and awaiting approval.' });
+    }
+    if (existing.status === 'active') {
+      return json({ ok: true, alreadyActive: true, message: 'This phone number is already registered. You can check your seller dashboard.' });
+    }
+  }
+
+  const sellerId = id('SEL');
+  await env.DB.prepare(
+    'INSERT INTO sellers (id, name, phone, email, payout_method, status) VALUES (?,?,?,?,?,?)'
+  ).bind(sellerId, b.name.trim(), phone, b.email || null, 'eft', 'pending').run();
+
+  return json({ ok: true, id: sellerId, message: 'Registration submitted — we will contact you on WhatsApp once approved.' });
+}
+
+// Public — seller looks up their own data by phone number
+async function sellerPortal(phone, env) {
+  // Normalise
+  let p = phone.replace(/[\s\-()]/g, '');
+  if (p.startsWith('0')) p = '27' + p.slice(1);
+
+  const seller = await env.DB.prepare(
+    'SELECT id, name, phone, email, payout_method, bank_details, status FROM sellers WHERE phone = ?'
+  ).bind(p).first();
+  if (!seller) return err('No seller found for this phone number', 404);
+
+  if (seller.status === 'pending') {
+    return json({ ok: true, status: 'pending', seller: { name: seller.name, phone: seller.phone } });
+  }
+
+  // Fetch their items across all auctions
+  const items = await env.DB.prepare(`
+    SELECT i.id, i.name, i.description, i.image_key, i.starting_bid, i.current_bid,
+           i.highest_bidder_name, i.status, i.end_date, i.delivery_method,
+           a.name AS auction_name, a.status AS auction_status
+    FROM items i
+    JOIN auctions a ON a.id = i.auction_id
+    WHERE i.seller_id = ?
+    ORDER BY i.created_at DESC
+  `).bind(seller.id).all();
+
+  // Fetch their payments (what they're owed)
+  const payments = await env.DB.prepare(`
+    SELECT p.id, p.amount, p.commission, p.seller_due, p.status AS payment_status,
+           p.collected_at, i.name AS item_name
+    FROM payments p
+    JOIN items i ON i.id = p.item_id
+    WHERE i.seller_id = ?
+    ORDER BY p.id DESC
+  `).bind(seller.id).all();
+
+  // Fetch their payouts
+  const payouts = await env.DB.prepare(`
+    SELECT id, total_amount, status, paid_at, created_at
+    FROM payouts WHERE seller_id = ?
+    ORDER BY created_at DESC
+  `).bind(seller.id).all();
+
+  return json({
+    ok: true,
+    status: 'active',
+    seller: {
+      name: seller.name,
+      phone: seller.phone,
+      email: seller.email,
+      payoutMethod: seller.payout_method,
+      hasBankDetails: !!seller.bank_details,
+    },
+    items: items.results,
+    payments: payments.results,
+    payouts: payouts.results,
+  });
+}
+
+// Admin — update seller details / bank details
+async function updateSeller(sellerId, request, env) {
+  if (!requireAdmin(request, env)) return err('Unauthorized', 401);
+  const b = await request.json();
+  const fields = { name: 'name', phone: 'phone', email: 'email', payout_method: 'payoutMethod' };
+  const sets = [], vals = [];
+  for (const [col, key] of Object.entries(fields)) {
+    if (b[key] !== undefined) { sets.push(`${col} = ?`); vals.push(b[key]); }
+  }
+  if (b.bankDetails !== undefined) {
+    sets.push('bank_details = ?');
+    vals.push(b.bankDetails ? JSON.stringify(b.bankDetails) : null);
+  }
+  if (!sets.length) return err('Nothing to update');
+  vals.push(sellerId);
+  const res = await env.DB.prepare(
+    `UPDATE sellers SET ${sets.join(', ')} WHERE id = ?`
+  ).bind(...vals).run();
+  if (!res.meta.changes) return err('Seller not found', 404);
+  return json({ ok: true });
+}
+
+// Admin — approve a pending seller
+async function approveSeller(sellerId, request, env) {
+  if (!requireAdmin(request, env)) return err('Unauthorized', 401);
+  const res = await env.DB.prepare(
+    `UPDATE sellers SET status = 'active' WHERE id = ? AND status = 'pending'`
+  ).bind(sellerId).run();
+  if (!res.meta.changes) return err('Seller not found or already active', 404);
+  return json({ ok: true });
 }

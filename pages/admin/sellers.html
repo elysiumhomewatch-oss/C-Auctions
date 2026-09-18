@@ -17,11 +17,25 @@
         <h1>Sellers</h1>
         <div class="sub">People consigning items into your auctions.</div>
       </div>
-      <button onclick="toggleForm()">+ Add seller</button>
+      <button onclick="toggleForm()">+ Add manually</button>
     </div>
 
+    <!-- Pending approvals -->
+    <div id="pending-section" style="display:none;">
+      <div class="page-head" style="margin-top:0;">
+        <h2 style="margin:0;font-size:16px;">⏳ Pending approval</h2>
+      </div>
+      <div class="card" style="border-color:var(--clay-500);padding:0;overflow:hidden;">
+        <table>
+          <thead><tr><th>Name</th><th>Phone</th><th>Email</th><th>Registered</th><th></th></tr></thead>
+          <tbody id="pending-body"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Add manually form -->
     <div class="card" id="add-form" style="display:none;">
-      <h2>New seller</h2>
+      <h2>Add seller manually</h2>
       <div class="field-row">
         <div class="field">
           <label for="s-name">Name *</label>
@@ -67,12 +81,40 @@
       <button class="secondary" onclick="toggleForm()">Cancel</button>
     </div>
 
-    <div class="card">
+    <!-- Active sellers -->
+    <div class="page-head" style="margin-top:6px;">
+      <h2 style="margin:0;font-size:16px;">Active sellers</h2>
+    </div>
+    <div class="card" style="padding:0;overflow:hidden;">
       <table>
-        <thead><tr><th>Name</th><th>Phone</th><th>Email</th><th>Payout</th><th>Added</th></tr></thead>
-        <tbody id="sellers-body"><tr class="empty-row"><td colspan="5">Loading…</td></tr></tbody>
+        <thead><tr><th>Name</th><th>Phone</th><th>Email</th><th>Payout</th><th>Added</th><th></th></tr></thead>
+        <tbody id="sellers-body"><tr class="empty-row"><td colspan="6">Loading…</td></tr></tbody>
       </table>
     </div>
+
+    <!-- Edit bank details modal -->
+    <div class="modal-bg" id="bank-modal">
+      <div class="modal">
+        <h2>Bank details — <span id="bank-modal-name"></span></h2>
+        <input type="hidden" id="bank-seller-id">
+        <div class="field-row">
+          <div class="field"><label>Account holder</label><input type="text" id="b-holder"></div>
+          <div class="field"><label>Bank</label><input type="text" id="b-bank"></div>
+        </div>
+        <div class="field-row">
+          <div class="field"><label>Account number</label><input type="text" id="b-acc"></div>
+          <div class="field"><label>Branch code</label><input type="text" id="b-branch"></div>
+        </div>
+        <button onclick="saveBankDetails()">Save bank details</button>
+        <button class="secondary" style="margin-top:8px;" onclick="closeBankModal()">Cancel</button>
+      </div>
+    </div>
+    <style>
+    .modal-bg{position:fixed;inset:0;background:rgba(43,38,33,.4);display:none;align-items:center;justify-content:center;z-index:100;padding:20px;}
+    .modal-bg.show{display:flex;}
+    .modal{background:#fff;border-radius:var(--radius);padding:22px 24px;max-width:480px;width:100%;}
+    .modal h2{margin-top:0;}
+    </style>
   </main>
 </div>
 
@@ -88,35 +130,69 @@ function toggleForm() {
 
 const load = guard(async () => {
   const { sellers } = await api('/sellers');
+
+  // Pending
+  const pending = sellers.filter(s => s.status === 'pending');
+  const active = sellers.filter(s => s.status !== 'pending');
+
+  const pendingSec = document.getElementById('pending-section');
+  if (pending.length) {
+    pendingSec.style.display = 'block';
+    document.getElementById('pending-body').innerHTML = pending.map(s => `
+      <tr>
+        <td><strong>${escapeHtml(s.name)}</strong></td>
+        <td>${escapeHtml(s.phone)}</td>
+        <td>${escapeHtml(s.email || '—')}</td>
+        <td class="muted">${formatDate(s.created_at)}</td>
+        <td style="display:flex;gap:6px;">
+          <button class="small" onclick="approve('${s.id}','${escapeHtml(s.name)}','${escapeHtml(s.phone)}')">✓ Approve</button>
+        </td>
+      </tr>
+    `).join('');
+  } else {
+    pendingSec.style.display = 'none';
+  }
+
+  // Active
   const body = document.getElementById('sellers-body');
-  if (!sellers.length) {
-    body.innerHTML = `<tr class="empty-row"><td colspan="5">No sellers yet — add one above.</td></tr>`;
+  if (!active.length) {
+    body.innerHTML = `<tr class="empty-row"><td colspan="6">No active sellers yet.</td></tr>`;
     return;
   }
-  body.innerHTML = sellers.map(s => `
+  body.innerHTML = active.map(s => `
     <tr>
       <td><strong>${escapeHtml(s.name)}</strong></td>
       <td>${escapeHtml(s.phone)}</td>
       <td>${escapeHtml(s.email || '—')}</td>
       <td><span class="badge">${escapeHtml(s.payout_method)}</span></td>
       <td class="muted">${formatDate(s.created_at)}</td>
+      <td><button class="small secondary" onclick="openBankModal('${s.id}','${escapeHtml(s.name)}',${s.bank_details ? `'${escapeHtml(s.bank_details)}'` : 'null'})">Bank details</button></td>
     </tr>
   `).join('');
+});
+
+const approve = guard(async (sellerId, name, phone) => {
+  await api(`/sellers/${sellerId}/approve`, { method: 'POST', body: {} });
+  toast(`${name} approved`, 'success');
+  load();
+  // Build WhatsApp approval message
+  const msg = `Hi ${name} 👋\n\nGreat news — your C-Auctions seller account has been approved!\n\nYou can now view your seller dashboard here:\nhttps://c-auctions.pages.dev/seller.html\n\nTo list items, just send us photos on WhatsApp with a short description and your minimum price. We'll take care of the rest. 🎉`;
+  const waUrl = `https://wa.me/${phone.replace(/\D/g,'')}?text=${encodeURIComponent(msg)}`;
+  if (confirm(`Approve ${name}? Click OK to also open their WhatsApp approval message.`)) {
+    window.open(waUrl, '_blank');
+  }
 });
 
 const submitSeller = guard(async () => {
   const name = document.getElementById('s-name').value.trim();
   const phone = document.getElementById('s-phone').value.trim();
   if (!name || !phone) return toast('Name and phone are required', 'error');
-
   const holder = document.getElementById('s-bank-holder').value.trim();
   const bank = document.getElementById('s-bank-name').value.trim();
   const branch = document.getElementById('s-bank-branch').value.trim();
   const acc = document.getElementById('s-bank-acc').value.trim();
   const bankDetails = (holder || bank || branch || acc)
-    ? { accountHolder: holder, bank, branchCode: branch, accountNumber: acc }
-    : null;
-
+    ? { accountHolder: holder, bank, branchCode: branch, accountNumber: acc } : null;
   await api('/sellers', {
     method: 'POST',
     body: {
@@ -130,6 +206,33 @@ const submitSeller = guard(async () => {
   toggleForm();
   ['s-name','s-phone','s-email','s-bank-holder','s-bank-name','s-bank-branch','s-bank-acc']
     .forEach(id => document.getElementById(id).value = '');
+  load();
+});
+
+function openBankModal(sellerId, name, bankDetailsJson) {
+  document.getElementById('bank-seller-id').value = sellerId;
+  document.getElementById('bank-modal-name').textContent = name;
+  let bd = {};
+  try { if (bankDetailsJson) bd = JSON.parse(bankDetailsJson); } catch {}
+  document.getElementById('b-holder').value = bd.accountHolder || '';
+  document.getElementById('b-bank').value = bd.bank || '';
+  document.getElementById('b-acc').value = bd.accountNumber || '';
+  document.getElementById('b-branch').value = bd.branchCode || '';
+  document.getElementById('bank-modal').classList.add('show');
+}
+function closeBankModal() { document.getElementById('bank-modal').classList.remove('show'); }
+
+const saveBankDetails = guard(async () => {
+  const sellerId = document.getElementById('bank-seller-id').value;
+  const bd = {
+    accountHolder: document.getElementById('b-holder').value.trim(),
+    bank: document.getElementById('b-bank').value.trim(),
+    accountNumber: document.getElementById('b-acc').value.trim(),
+    branchCode: document.getElementById('b-branch').value.trim(),
+  };
+  await api(`/sellers/${sellerId}`, { method: 'PATCH', body: { bankDetails: bd } });
+  toast('Bank details saved', 'success');
+  closeBankModal();
   load();
 });
 

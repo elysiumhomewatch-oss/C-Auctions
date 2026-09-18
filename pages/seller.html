@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sell with us — C-Auctions</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Work+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --teal-600:#2F6E68; --teal-700:#235550; --teal-100:#DCEAE7;
+  --stone-50:#F7F4EE; --stone-100:#EDE7DB; --stone-200:#E1D9C7; --stone-300:#D2C7AE;
+  --ink-900:#2B2621; --ink-600:#5C5346; --ink-400:#8A8071;
+  --green-600:#4C7A4F; --green-100:#DEEBDD;
+  --clay-500:#B9773F; --clay-100:#F3E4D2;
+  --red-600:#A8452E; --red-100:#F3DFD8;
+  --radius:10px;
+}
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;}
+body{
+  background:var(--stone-50); color:var(--ink-900);
+  font-family:'Work Sans',sans-serif; font-size:15px; line-height:1.6;
+}
+h1,h2,h3,.brand,nav a,button{font-family:'Space Grotesk',sans-serif;}
+
+/* Header */
+header{
+  background:#fff; border-bottom:1px solid var(--stone-200);
+  padding:0 28px; display:flex; align-items:center;
+  justify-content:space-between; height:58px;
+}
+.brand{font-weight:700;font-size:17px;letter-spacing:-.01em;text-decoration:none;color:var(--ink-900);}
+.brand span{color:var(--teal-600);}
+.header-nav{display:flex;gap:18px;align-items:center;}
+.header-nav a{color:var(--ink-600);font-size:14px;font-weight:500;text-decoration:none;}
+.header-nav a:hover{color:var(--teal-600);}
+
+/* Hero */
+.hero{
+  background:linear-gradient(135deg,var(--teal-700) 0%,var(--teal-600) 100%);
+  color:#fff; padding:56px 28px 52px; text-align:center;
+}
+.hero h1{font-size:clamp(26px,5vw,38px);margin:0 0 12px;letter-spacing:-.02em;}
+.hero p{font-size:17px;opacity:.88;max-width:520px;margin:0 auto 28px;}
+.hero-btn{
+  display:inline-block;background:#fff;color:var(--teal-700);
+  font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:15px;
+  padding:12px 28px;border-radius:8px;text-decoration:none;
+  box-shadow:0 2px 10px rgba(0,0,0,.12);
+}
+.hero-btn:hover{background:var(--stone-100);}
+
+/* How it works */
+.how{max-width:860px;margin:52px auto;padding:0 24px;}
+.how h2{font-size:22px;margin:0 0 28px;text-align:center;}
+.steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:20px;}
+.step{text-align:center;padding:20px 14px;}
+.step .num{
+  width:40px;height:40px;border-radius:50%;background:var(--teal-100);
+  color:var(--teal-700);font-family:'Space Grotesk',sans-serif;font-weight:700;
+  font-size:17px;display:flex;align-items:center;justify-content:center;margin:0 auto 12px;
+}
+.step h3{font-size:14.5px;margin:0 0 6px;}
+.step p{font-size:13.5px;color:var(--ink-600);margin:0;}
+
+/* Forms / cards */
+.section{max-width:560px;margin:0 auto 52px;padding:0 24px;}
+.card{
+  background:#fff;border:1px solid var(--stone-200);border-radius:var(--radius);
+  padding:28px 28px;box-shadow:0 1px 3px rgba(43,38,33,.06);
+}
+.card h2{font-size:19px;margin:0 0 20px;}
+label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-600);
+  margin:0 0 5px;text-transform:uppercase;letter-spacing:.03em;}
+input[type=text],input[type=tel],input[type=email]{
+  width:100%;padding:10px 12px;border:1px solid var(--stone-300);border-radius:8px;
+  font-family:'Work Sans',sans-serif;font-size:14.5px;color:var(--ink-900);margin-bottom:14px;
+}
+input:focus{outline:2px solid var(--teal-600);outline-offset:0;border-color:var(--teal-600);}
+button{
+  width:100%;padding:12px;background:var(--teal-600);color:#fff;border:none;
+  border-radius:8px;font-family:'Space Grotesk',sans-serif;font-weight:700;
+  font-size:15px;cursor:pointer;margin-top:4px;
+}
+button:hover{background:var(--teal-700);}
+button:disabled{opacity:.5;cursor:not-allowed;}
+button.secondary{background:var(--stone-200);color:var(--ink-900);margin-top:8px;}
+button.secondary:hover{background:var(--stone-300);}
+.hint{font-size:13px;color:var(--ink-400);margin-top:-8px;margin-bottom:14px;}
+
+/* Feedback banners */
+.banner{border-radius:8px;padding:14px 16px;margin-bottom:16px;font-size:14px;line-height:1.5;}
+.banner.success{background:var(--green-100);color:var(--green-600);}
+.banner.warn{background:var(--clay-100);color:var(--clay-500);}
+.banner.error{background:var(--red-100);color:var(--red-600);}
+.banner.info{background:var(--teal-100);color:var(--teal-700);}
+
+/* Dashboard */
+.dash-header{
+  background:#fff;border-bottom:1px solid var(--stone-200);
+  padding:16px 24px;margin-bottom:24px;
+}
+.dash-header h2{margin:0 0 2px;font-size:18px;}
+.dash-header p{margin:0;color:var(--ink-600);font-size:13.5px;}
+
+.stats-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px;margin-bottom:22px;}
+.stat{background:#fff;border:1px solid var(--stone-200);border-radius:var(--radius);padding:14px 16px;}
+.stat .num{font-family:'Space Grotesk',sans-serif;font-size:22px;font-weight:700;}
+.stat .label{color:var(--ink-600);font-size:12px;margin-top:4px;}
+
+.section-title{font-family:'Space Grotesk',sans-serif;font-size:15px;font-weight:700;
+  margin:24px 0 10px;padding-bottom:7px;border-bottom:1px solid var(--stone-200);}
+
+.item-card{
+  background:#fff;border:1px solid var(--stone-200);border-radius:var(--radius);
+  padding:14px 16px;margin-bottom:10px;display:flex;gap:14px;align-items:flex-start;
+}
+.item-card img{width:56px;height:56px;object-fit:cover;border-radius:6px;
+  background:var(--stone-200);flex:0 0 56px;}
+.item-card .info{flex:1;min-width:0;}
+.item-card .name{font-weight:600;font-size:14.5px;margin-bottom:2px;}
+.item-card .meta{font-size:13px;color:var(--ink-600);}
+.item-card .bid{font-family:'Space Grotesk',sans-serif;font-size:16px;font-weight:700;color:var(--teal-700);}
+
+.dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:5px;}
+.dot-open{background:var(--teal-600);}
+.dot-sold{background:var(--green-600);}
+.dot-unsold{background:transparent;border:1.5px solid var(--ink-400);}
+.dot-closed{background:transparent;border:1.5px solid var(--ink-600);}
+
+.pay-row{
+  background:#fff;border:1px solid var(--stone-200);border-radius:8px;
+  padding:12px 16px;margin-bottom:8px;display:flex;justify-content:space-between;
+  align-items:center;gap:10px;flex-wrap:wrap;
+}
+.pay-row .item-label{font-size:14px;font-weight:600;}
+.pay-row .amounts{font-size:13px;color:var(--ink-600);}
+.pay-row .status-tag{font-size:12px;font-weight:700;padding:3px 10px;border-radius:999px;}
+.tag-paid{background:var(--green-100);color:var(--green-600);}
+.tag-pending{background:var(--clay-100);color:var(--clay-500);}
+.tag-collected{background:var(--teal-100);color:var(--teal-700);}
+
+/* Toggle between screens */
+.screen{display:none;}
+.screen.active{display:block;}
+
+@media(max-width:600px){
+  header{padding:0 16px;}
+  .hero{padding:40px 18px 36px;}
+  .card{padding:20px 18px;}
+  .section{padding:0 16px;}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <a href="index.html" class="brand">C-<span>Auctions</span></a>
+  <nav class="header-nav">
+    <a href="index.html">Auctions</a>
+    <a href="seller.html" style="color:var(--teal-600);font-weight:700;">Sell with us</a>
+  </nav>
+</header>
+
+<!-- ── Screen: landing (default) ── -->
+<div class="screen active" id="screen-landing">
+  <div class="hero">
+    <h1>Turn your items into cash</h1>
+    <p>Register as a seller, drop off your items, and we handle the rest — bidding, payments, and collection.</p>
+    <a href="#" class="hero-btn" onclick="showScreen('screen-register');return false;">Register to sell →</a>
+  </div>
+
+  <div class="how">
+    <h2>How it works</h2>
+    <div class="steps">
+      <div class="step">
+        <div class="num">1</div>
+        <h3>Register</h3>
+        <p>Fill in your name and phone number. We'll approve your account via WhatsApp.</p>
+      </div>
+      <div class="step">
+        <div class="num">2</div>
+        <h3>List your items</h3>
+        <p>Send us photos and a minimum price. We create the listing and set the starting bid.</p>
+      </div>
+      <div class="step">
+        <div class="num">3</div>
+        <h3>Auction runs</h3>
+        <p>Bidders compete online. You can watch the bids live on your seller dashboard.</p>
+      </div>
+      <div class="step">
+        <div class="num">4</div>
+        <h3>Collect your payout</h3>
+        <p>Once the buyer collects the item, we transfer your share directly to you.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="card" style="text-align:center;padding:24px;">
+      <p style="margin:0 0 14px;color:var(--ink-600);">Already registered?</p>
+      <button class="secondary" style="width:auto;padding:10px 24px;" onclick="showScreen('screen-lookup')">View my seller dashboard</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Screen: register ── -->
+<div class="screen" id="screen-register">
+  <div class="section" style="margin-top:40px;">
+    <div class="card">
+      <h2>Register as a seller</h2>
+      <div id="reg-banner"></div>
+      <div id="reg-form">
+        <label for="r-name">Full name *</label>
+        <input type="text" id="r-name" placeholder="Jane Smith">
+        <label for="r-phone">WhatsApp number *</label>
+        <input type="tel" id="r-phone" placeholder="082 123 4567">
+        <div class="hint">We'll send your approval and collection notifications here.</div>
+        <label for="r-email">Email (optional)</label>
+        <input type="email" id="r-email" placeholder="jane@example.com">
+        <button id="reg-btn" onclick="submitRegistration()">Submit registration</button>
+        <button class="secondary" onclick="showScreen('screen-landing')">← Back</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Screen: lookup (returning seller) ── -->
+<div class="screen" id="screen-lookup">
+  <div class="section" style="margin-top:40px;">
+    <div class="card">
+      <h2>View your dashboard</h2>
+      <div id="lookup-banner"></div>
+      <label for="l-phone">Your WhatsApp number</label>
+      <input type="tel" id="l-phone" placeholder="082 123 4567"
+        onkeydown="if(event.key==='Enter') loadDashboard()">
+      <button onclick="loadDashboard()">Open dashboard</button>
+      <button class="secondary" onclick="showScreen('screen-landing')">← Back</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Screen: dashboard ── -->
+<div class="screen" id="screen-dashboard">
+  <div class="dash-header">
+    <h2 id="dash-name">My seller dashboard</h2>
+    <p id="dash-phone"></p>
+  </div>
+  <div class="section" style="max-width:700px;margin-bottom:52px;">
+    <div class="stats-row" id="dash-stats"></div>
+
+    <div class="section-title">My items</div>
+    <div id="dash-items"><p style="color:var(--ink-400);">Loading…</p></div>
+
+    <div class="section-title">Payments &amp; payouts</div>
+    <div id="dash-payments"><p style="color:var(--ink-400);">Loading…</p></div>
+
+    <div style="margin-top:24px;">
+      <button class="secondary" onclick="showScreen('screen-landing')">← Back</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = 'https://consignment-auctions-api.morneydeetlefs.workers.dev/api';
+
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  window.scrollTo(0, 0);
+}
+
+function normalisePhone(raw) {
+  let p = raw.replace(/[\s\-()]/g, '');
+  if (p.startsWith('0')) p = '27' + p.slice(1);
+  if (!p.startsWith('27')) p = '27' + p;
+  return p;
+}
+
+function money(n) {
+  return 'R' + Number(n).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function banner(containerId, msg, type) {
+  document.getElementById(containerId).innerHTML =
+    `<div class="banner ${type}">${msg}</div>`;
+}
+
+// ── Registration ──────────────────────────────────────────────
+async function submitRegistration() {
+  const name = document.getElementById('r-name').value.trim();
+  const phone = document.getElementById('r-phone').value.trim();
+  const email = document.getElementById('r-email').value.trim();
+  if (!name || !phone) return banner('reg-banner', 'Name and phone are required.', 'error');
+
+  const btn = document.getElementById('reg-btn');
+  btn.disabled = true; btn.textContent = 'Submitting…';
+
+  try {
+    const res = await fetch(`${API}/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, phone, email: email || undefined }),
+    });
+    const data = await res.json();
+    if (data.alreadyPending) {
+      banner('reg-banner', '⏳ ' + data.message, 'warn');
+    } else if (data.alreadyActive) {
+      banner('reg-banner', '✅ ' + data.message, 'info');
+      document.getElementById('reg-form').innerHTML +=
+        `<button class="secondary" onclick="document.getElementById('l-phone').value='${document.getElementById('r-phone').value}';showScreen('screen-lookup')">Open my dashboard →</button>`;
+    } else if (data.ok) {
+      document.getElementById('reg-form').style.display = 'none';
+      banner('reg-banner', `
+        <strong>✅ Registration submitted!</strong><br>
+        Thanks, ${name}. We'll send you a WhatsApp message once your account is approved — usually within 24 hours.
+        Once approved you can list items by sending us photos on WhatsApp.
+      `, 'success');
+    } else {
+      throw new Error(data.error || 'Something went wrong');
+    }
+  } catch (e) {
+    banner('reg-banner', '❌ ' + e.message, 'error');
+  }
+  btn.disabled = false; btn.textContent = 'Submit registration';
+}
+
+// ── Dashboard ─────────────────────────────────────────────────
+async function loadDashboard() {
+  const raw = document.getElementById('l-phone').value.trim();
+  if (!raw) return banner('lookup-banner', 'Enter your phone number.', 'error');
+  const phone = normalisePhone(raw);
+
+  try {
+    const res = await fetch(`${API}/seller-portal/${phone}`);
+    const data = await res.json();
+    if (!res.ok) {
+      if (res.status === 404) {
+        banner('lookup-banner',
+          `No account found for that number. <a href="#" onclick="showScreen('screen-register');return false;">Register here →</a>`,
+          'error');
+      } else {
+        banner('lookup-banner', data.error || 'Something went wrong', 'error');
+      }
+      return;
+    }
+
+    if (data.status === 'pending') {
+      banner('lookup-banner', `
+        ⏳ <strong>Your account is pending approval.</strong><br>
+        We'll send you a WhatsApp message once you're approved, ${data.seller.name}.
+      `, 'warn');
+      return;
+    }
+
+    renderDashboard(data);
+    showScreen('screen-dashboard');
+
+  } catch (e) {
+    banner('lookup-banner', '❌ ' + e.message, 'error');
+  }
+}
+
+function renderDashboard(data) {
+  const { seller, items, payments, payouts } = data;
+  document.getElementById('dash-name').textContent = seller.name;
+  document.getElementById('dash-phone').textContent = seller.phone;
+
+  const totalEarned = payments.filter(p => p.payment_status === 'paid').reduce((s, p) => s + p.seller_due, 0);
+  const totalPaidOut = payouts.filter(p => p.status === 'paid').reduce((s, p) => s + p.total_amount, 0);
+  const openItems = items.filter(i => i.status === 'open').length;
+  const soldItems = items.filter(i => i.status === 'sold').length;
+
+  document.getElementById('dash-stats').innerHTML = `
+    <div class="stat"><div class="num">${items.length}</div><div class="label">Total items</div></div>
+    <div class="stat"><div class="num">${openItems}</div><div class="label">Currently bidding</div></div>
+    <div class="stat"><div class="num">${soldItems}</div><div class="label">Sold</div></div>
+    <div class="stat"><div class="num">${money(totalEarned)}</div><div class="label">Total earned</div></div>
+    <div class="stat"><div class="num">${money(totalPaidOut)}</div><div class="label">Paid out to you</div></div>
+  `;
+
+  if (!items.length) {
+    document.getElementById('dash-items').innerHTML =
+      `<p style="color:var(--ink-400);">No items yet. Send us photos on WhatsApp to get your first item listed.</p>`;
+  } else {
+    document.getElementById('dash-items').innerHTML = items.map(it => {
+      const dotClass = { open:'dot-open', sold:'dot-sold', unsold:'dot-unsold', closed:'dot-closed' }[it.status] || 'dot-closed';
+      const imgSrc = it.image_key
+        ? `${API}/images/${it.image_key}`
+        : '';
+      return `
+        <div class="item-card">
+          ${imgSrc ? `<img src="${imgSrc}" onerror="this.style.display='none'">` : ''}
+          <div class="info">
+            <div class="name">${esc(it.name)}</div>
+            <div class="meta">
+              <span class="dot ${dotClass}"></span>${it.status}
+              &nbsp;·&nbsp; ${esc(it.auction_name)}
+              ${it.end_date ? `&nbsp;·&nbsp; Ends ${new Date(it.end_date).toLocaleDateString('en-ZA')}` : ''}
+            </div>
+            ${it.status === 'open' || it.status === 'sold'
+              ? `<div class="bid">Current bid: ${money(it.current_bid)}${it.highest_bidder_name ? ` <span style="font-size:13px;font-weight:400;color:var(--ink-600);">by ${esc(it.highest_bidder_name)}</span>` : ''}</div>`
+              : ''}
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  if (!payments.length) {
+    document.getElementById('dash-payments').innerHTML =
+      `<p style="color:var(--ink-400);">No payments yet.</p>`;
+  } else {
+    document.getElementById('dash-payments').innerHTML = payments.map(p => {
+      const tag = p.collected_at
+        ? `<span class="status-tag tag-collected">✓ Collected</span>`
+        : p.payment_status === 'paid'
+          ? `<span class="status-tag tag-paid">Payment received</span>`
+          : `<span class="status-tag tag-pending">Awaiting payment</span>`;
+      return `
+        <div class="pay-row">
+          <div>
+            <div class="item-label">${esc(p.item_name)}</div>
+            <div class="amounts">Sale: ${money(p.amount)} &nbsp;·&nbsp; Your share: <strong>${money(p.seller_due)}</strong></div>
+          </div>
+          ${tag}
+        </div>
+      `;
+    }).join('');
+
+    if (payouts.length) {
+      document.getElementById('dash-payments').innerHTML += `
+        <div style="margin-top:14px;font-size:13.5px;color:var(--ink-600);">
+          <strong>Payout history</strong>
+        </div>
+        ${payouts.map(po => `
+          <div class="pay-row">
+            <div>
+              <div class="item-label">${money(po.total_amount)}</div>
+              <div class="amounts">${new Date(po.created_at).toLocaleDateString('en-ZA')}</div>
+            </div>
+            <span class="status-tag ${po.status === 'paid' ? 'tag-paid' : 'tag-pending'}">
+              ${po.status === 'paid' ? '✓ Sent' : 'Pending'}
+            </span>
+          </div>
+        `).join('')}
+      `;
+    }
+  }
+}
+
+function esc(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c =>
+    ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+</script>
+</body>
+</html>
