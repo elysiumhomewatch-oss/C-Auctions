@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Collection — C-Auctions</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Work+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+:root {
+  --teal-600: #2F6E68; --teal-700: #235550; --teal-100: #DCEAE7;
+  --stone-50: #F7F4EE; --stone-200: #E1D9C7; --stone-300: #D2C7AE;
+  --ink-900: #2B2621; --ink-600: #5C5346; --ink-400: #8A8071;
+  --green-600: #4C7A4F; --green-100: #DEEBDD;
+  --clay-500: #B9773F; --clay-100: #F3E4D2;
+  --red-600: #A8452E;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--stone-50); color: var(--ink-900);
+  font-family: 'Work Sans', sans-serif; min-height: 100vh;
+  display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+  padding: 32px 20px;
+}
+h1, h2, .brand { font-family: 'Space Grotesk', sans-serif; }
+.brand { font-size: 15px; font-weight: 700; color: var(--ink-400); margin-bottom: 28px; letter-spacing: .01em; }
+.brand span { color: var(--teal-600); }
+.card {
+  background: #fff; border: 1px solid var(--stone-200); border-radius: 14px;
+  padding: 28px 28px; max-width: 420px; width: 100%; text-align: center;
+  box-shadow: 0 2px 12px rgba(43,38,33,.07);
+}
+.role-badge {
+  display: inline-block; padding: 4px 14px; border-radius: 999px;
+  font-size: 13px; font-weight: 700; margin-bottom: 14px; letter-spacing: .02em;
+}
+.role-buyer { background: var(--teal-100); color: var(--teal-700); }
+.role-seller { background: var(--clay-100); color: var(--clay-500); }
+h2 { font-size: 20px; margin: 0 0 4px; }
+.item-name { color: var(--ink-600); font-size: 15px; margin-bottom: 20px; }
+.qr-wrap {
+  display: flex; justify-content: center; margin: 18px 0;
+  padding: 14px; background: var(--stone-50); border-radius: 10px;
+  border: 1px solid var(--stone-200);
+}
+.pin-block {
+  font-family: 'Space Grotesk', sans-serif; font-size: 28px; font-weight: 700;
+  letter-spacing: .18em; color: var(--ink-900); margin: 14px 0 6px;
+  user-select: all;
+}
+.pin-label { font-size: 12.5px; color: var(--ink-400); margin-bottom: 18px; }
+.instruction {
+  background: var(--stone-50); border: 1px solid var(--stone-200);
+  border-radius: 8px; padding: 12px 14px; font-size: 13.5px; color: var(--ink-600);
+  margin-top: 8px; line-height: 1.5;
+}
+.collected-banner {
+  background: var(--green-100); border: 1px solid var(--green-600);
+  border-radius: 10px; padding: 18px 20px; text-align: center; margin-bottom: 18px;
+}
+.collected-banner .icon { font-size: 32px; margin-bottom: 6px; }
+.collected-banner h2 { color: var(--green-600); margin: 0 0 4px; }
+.collected-banner p { color: var(--green-600); margin: 0; font-size: 14px; }
+.error-banner { color: var(--red-600); text-align: center; padding: 28px 0; }
+.loading { color: var(--ink-400); text-align: center; padding: 40px 0; }
+.copy-btn {
+  background: var(--stone-200); border: none; border-radius: 6px; padding: 6px 14px;
+  font-size: 12.5px; font-family: 'Space Grotesk', sans-serif; font-weight: 600;
+  cursor: pointer; color: var(--ink-900); margin-left: 8px;
+}
+.copy-btn:hover { background: var(--stone-300); }
+</style>
+</head>
+<body>
+<div class="brand">C-<span>Auctions</span></div>
+<div class="card" id="card">
+  <div class="loading">Loading your collection token…</div>
+</div>
+
+<script>
+const API_BASE = 'https://consignment-auctions-api.morneydeetlefs.workers.dev/api';
+const params = new URLSearchParams(location.search);
+const pin = params.get('pin');
+
+function formatPin(p) {
+  // Format as XXX-XXX-XXXX for readability
+  return p ? `${p.slice(0,3)}-${p.slice(3,6)}-${p.slice(6)}` : '';
+}
+
+function formatDate(s) {
+  if (!s) return '';
+  const d = new Date(s.includes('T') ? s : s + 'Z');
+  return d.toLocaleString('en-ZA', { dateStyle: 'medium', timeStyle: 'short' });
+}
+
+async function init() {
+  const card = document.getElementById('card');
+  if (!pin) {
+    card.innerHTML = `<div class="error-banner">No PIN specified in this link.<br>Ask the auction admin to resend your collection link.</div>`;
+    return;
+  }
+
+  let data;
+  try {
+    const res = await fetch(`${API_BASE}/collect/${pin}`);
+    data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'PIN not found');
+  } catch (e) {
+    card.innerHTML = `<div class="error-banner">❌ ${e.message}</div>`;
+    return;
+  }
+
+  if (data.collected) {
+    card.innerHTML = `
+      <div class="collected-banner">
+        <div class="icon">✅</div>
+        <h2>Collection confirmed</h2>
+        <p>This item was collected on ${formatDate(data.collectedAt)}.</p>
+      </div>
+      <div style="font-size:14px;color:var(--ink-600);">
+        <strong>${data.itemName}</strong><br>
+        Buyer: ${data.buyerName} &nbsp;·&nbsp; Seller: ${data.sellerName}
+      </div>
+    `;
+    return;
+  }
+
+  const roleClass = data.role === 'buyer' ? 'role-buyer' : 'role-seller';
+  const roleLabel = data.role === 'buyer' ? 'BUYER' : 'SELLER';
+  const instruction = data.role === 'buyer'
+    ? `Show this QR code or PIN to the <strong>seller</strong> when you collect your item. They will scan it to confirm the handover.`
+    : `Show this QR code or PIN to the <strong>buyer</strong> when they arrive. Scanning their code — or showing them yours — confirms the handover and releases your payment.`;
+
+  // Build the page content first (without QR canvas)
+  card.innerHTML = `
+    <div class="role-badge ${roleClass}">${roleLabel}</div>
+    <h2>${data.partyName}</h2>
+    <div class="item-name">${data.itemName}</div>
+    <div class="qr-wrap" id="qr-target"></div>
+    <div class="pin-block" id="pin-display">${formatPin(pin)}</div>
+    <div class="pin-label">Your collection PIN &nbsp;<button class="copy-btn" onclick="copyPin()">Copy</button></div>
+    <div class="instruction">${instruction}</div>
+  `;
+
+  // Generate QR pointing to this same page — scanning it opens the page and can confirm
+  const qrUrl = location.href;
+  new QRCode(document.getElementById('qr-target'), {
+    text: qrUrl,
+    width: 200,
+    height: 200,
+    colorDark: '#2B2621',
+    colorLight: '#F7F4EE',
+    correctLevel: QRCode.CorrectLevel.M,
+  });
+}
+
+function copyPin() {
+  const raw = pin; // copy the raw 10-digit PIN
+  navigator.clipboard.writeText(raw).then(() => {
+    const btn = document.querySelector('.copy-btn');
+    btn.textContent = 'Copied!';
+    setTimeout(() => btn.textContent = 'Copy', 1800);
+  });
+}
+
+init();
+</script>
+</body>
+</html>

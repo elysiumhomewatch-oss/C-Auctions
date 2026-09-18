@@ -12,7 +12,13 @@
 //   - POST  /payouts               — record a payout to a seller (admin)
 //   - GET   /payouts               — payout history (admin)
 //   - POST  /payouts/:id/mark-paid — mark a payout as actually sent (admin)
-// Everything above this changelog is unchanged from the tested version.
+//
+// CHANGELOG (collection QR system):
+//   - POST  /payments/:id/collection-tokens — generate buyer+seller 10-digit PINs (admin)
+//   - GET   /payments/:id/collection-tokens — fetch existing tokens for a payment (admin)
+//   - GET   /collect/:pin                   — public: look up token info by PIN (for QR link)
+//   - POST  /collect/:pin/confirm           — public: confirm collection with either PIN
+// Everything above these changelogs is unchanged from the tested version.
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -131,6 +137,12 @@ export default {
       if (parts[0] === 'payouts' && method === 'POST' && !parts[1]) return createPayout(request, env);
       if (parts[0] === 'payouts' && method === 'GET' && !parts[1]) return listPayouts(request, env);
       if (parts[0] === 'payouts' && parts[2] === 'mark-paid' && method === 'POST') return markPayoutPaid(parts[1], request, env);
+
+      // ── collection tokens ──
+      if (parts[0] === 'payments' && parts[2] === 'collection-tokens' && method === 'POST') return generateCollectionTokens(parts[1], request, env);
+      if (parts[0] === 'payments' && parts[2] === 'collection-tokens' && method === 'GET') return getCollectionTokens(parts[1], request, env);
+      if (parts[0] === 'collect' && parts[1] && !parts[2] && method === 'GET') return lookupPin(parts[1], env);
+      if (parts[0] === 'collect' && parts[1] && parts[2] === 'confirm' && method === 'POST') return confirmCollection(parts[1], request, env);
 
       // ── images ──
       if (parts[0] === 'images' && method === 'POST') return uploadImage(request, env);
@@ -462,4 +474,125 @@ async function serveImage(key, env) {
       ...CORS,
     },
   });
+}
+
+// ── Collection tokens ───────────────────────────────────────────
+// Generates a 10-digit numeric PIN, zero-padded, crypto-random.
+function generatePin() {
+  const arr = new Uint32Array(1);
+  crypto.getRandomValues(arr);
+  return String(arr[0] % 10_000_000_000).padStart(10, '0');
+}
+
+async function generateCollectionTokens(paymentId, request, env) {
+  if (!requireAdmin(request, env)) return err('Unauthorized', 401);
+
+  const payment = await env.DB.prepare(
+    `SELECT p.*, i.name AS item_name, i.seller_id,
+            s.name AS seller_name, s.phone AS seller_phone,
+            i.highest_bidder_id AS buyer_id, i.highest_bidder_name AS buyer_name
+     FROM payments p
+     JOIN items i ON i.id = p.item_id
+     JOIN sellers s ON s.id = i.seller_id
+     WHERE p.id = ?`
+  ).bind(paymentId).first();
+  if (!payment) return err('Payment not found', 404);
+  if (payment.status !== 'paid') return err('Payment must be marked paid before generating collection tokens');
+
+  // Idempotent — if tokens already exist for this payment, return them.
+  const existing = await env.DB.prepare(
+    'SELECT * FROM collection_tokens WHERE payment_id = ?'
+  ).bind(paymentId).all();
+  if (existing.results.length) {
+    return json({ ok: true, tokens: existing.results, reused: true });
+  }
+
+  // Generate two unique PINs (retry on collision — probability is negligible but handle it).
+  let buyerPin, sellerPin;
+  for (let attempt = 0; attempt < 10; attempt++) {
+    const candidate = generatePin();
+    const clash = await env.DB.prepare(
+      'SELECT 1 FROM collection_tokens WHERE pin = ?'
+    ).bind(candidate).first();
+    if (!clash) {
+      if (!buyerPin) buyerPin = candidate;
+      else { sellerPin = candidate; break; }
+    }
+  }
+  if (!buyerPin || !sellerPin) return err('Could not generate unique PINs — try again');
+
+  const now = new Date().toISOString();
+  await env.DB.batch([
+    env.DB.prepare(
+      `INSERT INTO collection_tokens (payment_id, role, pin, party_name, created_at)
+       VALUES (?, 'buyer', ?, ?, ?)`
+    ).bind(paymentId, buyerPin, payment.buyer_name || payment.buyer_id, now),
+    env.DB.prepare(
+      `INSERT INTO collection_tokens (payment_id, role, pin, party_name, created_at)
+       VALUES (?, 'seller', ?, ?, ?)`
+    ).bind(paymentId, sellerPin, payment.seller_name, now),
+  ]);
+
+  const tokens = await env.DB.prepare(
+    'SELECT * FROM collection_tokens WHERE payment_id = ?'
+  ).bind(paymentId).all();
+  return json({ ok: true, tokens: tokens.results, reused: false });
+}
+
+async function getCollectionTokens(paymentId, request, env) {
+  if (!requireAdmin(request, env)) return err('Unauthorized', 401);
+  const rows = await env.DB.prepare(
+    'SELECT * FROM collection_tokens WHERE payment_id = ?'
+  ).bind(paymentId).all();
+  return json({ ok: true, tokens: rows.results });
+}
+
+// Public — called by the QR link page to show the holder what their token is for.
+async function lookupPin(pin, env) {
+  const token = await env.DB.prepare(
+    `SELECT ct.*, p.item_id, p.amount, p.status AS payment_status,
+            i.name AS item_name, i.highest_bidder_name AS buyer_name,
+            s.name AS seller_name,
+            p.collected_at
+     FROM collection_tokens ct
+     JOIN payments p ON p.id = ct.payment_id
+     JOIN items i ON i.id = p.item_id
+     JOIN sellers s ON s.id = i.seller_id
+     WHERE ct.pin = ?`
+  ).bind(pin).first();
+  if (!token) return err('PIN not found', 404);
+  return json({
+    ok: true,
+    role: token.role,
+    partyName: token.party_name,
+    itemName: token.item_name,
+    buyerName: token.buyer_name,
+    sellerName: token.seller_name,
+    saleAmount: token.amount,
+    collected: !!token.collected_at,
+    collectedAt: token.collected_at,
+  });
+}
+
+// Public — either party scanning the other's QR confirms collection.
+async function confirmCollection(pin, request, env) {
+  const token = await env.DB.prepare(
+    'SELECT * FROM collection_tokens WHERE pin = ?'
+  ).bind(pin).first();
+  if (!token) return err('PIN not found', 404);
+
+  const payment = await env.DB.prepare(
+    'SELECT * FROM payments WHERE id = ?'
+  ).bind(token.payment_id).first();
+  if (!payment) return err('Payment not found', 404);
+  if (payment.collected_at) {
+    return json({ ok: true, alreadyCollected: true, collectedAt: payment.collected_at });
+  }
+
+  const now = new Date().toISOString();
+  await env.DB.prepare(
+    `UPDATE payments SET collected_at = ?, collection_confirmed_by_pin = ? WHERE id = ?`
+  ).bind(now, pin, token.payment_id).run();
+
+  return json({ ok: true, alreadyCollected: false, collectedAt: now });
 }

@@ -40,6 +40,8 @@ function renderNav(active) {
     ['sellers.html', 'Sellers'],
     ['auctions.html', 'Auctions'],
     ['payments.html', 'Payments & payouts'],
+    ['reports.html', 'Reports'],
+    ['scan.html', '📷 Scan QR'],
     ['config.html', 'Settings'],
   ];
   slot.innerHTML = `

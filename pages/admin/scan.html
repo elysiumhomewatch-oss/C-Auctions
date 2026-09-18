@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Scan to Collect — C-Auctions Admin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Work+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="shared.css">
+<style>
+.scan-wrap { max-width: 480px; margin: 0 auto; }
+#reader {
+  width: 100%; border-radius: 10px; overflow: hidden;
+  border: 2px solid var(--teal-600); margin-bottom: 18px;
+  background: var(--stone-200); min-height: 200px;
+  display: flex; align-items: center; justify-content: center;
+}
+#reader > * { width: 100% !important; }
+.or-divider {
+  text-align: center; color: var(--ink-400); font-size: 13px;
+  margin: 16px 0; position: relative;
+}
+.or-divider::before, .or-divider::after {
+  content: ''; position: absolute; top: 50%; width: 42%; height: 1px;
+  background: var(--stone-300);
+}
+.or-divider::before { left: 0; }
+.or-divider::after { right: 0; }
+.pin-input-wrap { display: flex; gap: 8px; }
+.pin-input-wrap input { font-size: 18px; letter-spacing: .12em; font-family: 'Space Grotesk', sans-serif; }
+.result-card {
+  border-radius: 12px; padding: 20px 22px; margin-top: 18px;
+  border: 1px solid var(--stone-300);
+}
+.result-card.success { background: var(--green-100); border-color: var(--green-600); }
+.result-card.already { background: var(--teal-100); border-color: var(--teal-600); }
+.result-card.error { background: var(--red-100); border-color: var(--red-600); }
+.result-card h3 { margin: 0 0 8px; font-family: 'Space Grotesk', sans-serif; font-size: 16px; }
+.result-card.success h3 { color: var(--green-600); }
+.result-card.already h3 { color: var(--teal-700); }
+.result-card.error h3 { color: var(--red-600); }
+.result-detail { font-size: 14px; color: var(--ink-600); line-height: 1.6; }
+.cam-btn { width: 100%; justify-content: center; margin-bottom: 10px; }
+</style>
+</head>
+<body>
+<div class="shell">
+  <div id="nav-slot"></div>
+  <main>
+    <div class="page-head">
+      <div>
+        <h1>Scan to collect</h1>
+        <div class="sub">Scan a buyer or seller QR code to confirm item handover.</div>
+      </div>
+    </div>
+    <div class="scan-wrap">
+      <button class="cam-btn" id="cam-btn" onclick="startCamera()">📷 Start camera</button>
+      <div id="reader"></div>
+
+      <div class="or-divider">or type the PIN manually</div>
+
+      <div class="pin-input-wrap">
+        <input type="text" id="pin-input" placeholder="10-digit PIN" maxlength="10"
+          inputmode="numeric" pattern="[0-9]*"
+          oninput="this.value=this.value.replace(/\D/g,'')"
+          onkeydown="if(event.key==='Enter') submitPin()">
+        <button onclick="submitPin()">Confirm</button>
+      </div>
+
+      <div id="result"></div>
+    </div>
+  </main>
+</div>
+
+<!-- html5-qrcode from cdnjs -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
+<script src="shared.js"></script>
+<script>
+requireAuth();
+renderNav('scan.html');
+
+const API_BASE = 'https://consignment-auctions-api.morneydeetlefs.workers.dev/api';
+let scanner = null;
+let scanning = false;
+
+function formatDate(s) {
+  if (!s) return '—';
+  const d = new Date(s.includes('T') ? s : s + 'Z');
+  return d.toLocaleString('en-ZA', { dateStyle: 'medium', timeStyle: 'short' });
+}
+
+async function startCamera() {
+  if (scanning) return;
+  document.getElementById('cam-btn').textContent = 'Camera active…';
+  document.getElementById('cam-btn').disabled = true;
+  try {
+    scanner = new Html5Qrcode('reader');
+    await scanner.start(
+      { facingMode: 'environment' },
+      { fps: 8, qrbox: { width: 240, height: 240 } },
+      async (decodedText) => {
+        // Extract PIN from the URL — format is collect.html?pin=XXXXXXXXXX
+        let pin = decodedText;
+        try {
+          const u = new URL(decodedText);
+          const p = u.searchParams.get('pin');
+          if (p) pin = p;
+        } catch {}
+        pin = pin.replace(/\D/g, '').slice(0, 10);
+        if (pin.length === 10) {
+          await scanner.stop().catch(() => {});
+          scanning = false;
+          document.getElementById('cam-btn').textContent = '📷 Start camera';
+          document.getElementById('cam-btn').disabled = false;
+          await processPin(pin);
+        }
+      },
+      () => {} // ignore individual frame errors
+    );
+    scanning = true;
+  } catch (e) {
+    document.getElementById('cam-btn').textContent = '📷 Start camera';
+    document.getElementById('cam-btn').disabled = false;
+    toast('Camera error: ' + e.message, 'error');
+  }
+}
+
+async function submitPin() {
+  const raw = document.getElementById('pin-input').value.replace(/\D/g, '');
+  if (raw.length !== 10) return toast('Enter the full 10-digit PIN', 'error');
+  await processPin(raw);
+}
+
+async function processPin(pin) {
+  document.getElementById('result').innerHTML = '';
+  document.getElementById('pin-input').value = pin;
+
+  // First look up what this PIN is for
+  let info;
+  try {
+    const res = await fetch(`${API_BASE}/collect/${pin}`);
+    info = await res.json();
+    if (!res.ok) throw new Error(info.error || 'PIN not found');
+  } catch (e) {
+    showResult('error', '❌ PIN not recognised', e.message);
+    return;
+  }
+
+  if (info.collected) {
+    showResult('already', '✅ Already collected', `
+      <div class="result-detail">
+        <strong>${info.itemName}</strong><br>
+        Confirmed on ${formatDate(info.collectedAt)}<br>
+        Buyer: ${info.buyerName} · Seller: ${info.sellerName}
+      </div>
+    `);
+    return;
+  }
+
+  // Confirm collection
+  try {
+    const res = await fetch(`${API_BASE}/collect/${pin}/confirm`, { method: 'POST' });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Confirmation failed');
+
+    if (data.alreadyCollected) {
+      showResult('already', '✅ Already collected', `
+        <div class="result-detail">
+          <strong>${info.itemName}</strong><br>
+          Confirmed on ${formatDate(data.collectedAt)}<br>
+          Buyer: ${info.buyerName} · Seller: ${info.sellerName}
+        </div>
+      `);
+    } else {
+      showResult('success', '✅ Collection confirmed!', `
+        <div class="result-detail">
+          <strong>${info.itemName}</strong><br>
+          Buyer: <strong>${info.buyerName}</strong> ↔ Seller: <strong>${info.sellerName}</strong><br>
+          Confirmed at ${formatDate(data.collectedAt)}<br><br>
+          Seller is now eligible for payout.
+        </div>
+      `);
+      toast('Collection confirmed — seller is now eligible for payout', 'success');
+    }
+  } catch (e) {
+    showResult('error', '❌ Could not confirm', e.message);
+  }
+}
+
+function showResult(type, title, body) {
+  document.getElementById('result').innerHTML = `
+    <div class="result-card ${type}">
+      <h3>${title}</h3>
+      ${body}
+    </div>
+  `;
+}
+</script>
+</body>
+</html>

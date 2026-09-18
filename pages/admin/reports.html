@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Reports — C-Auctions Admin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Work+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="shared.css">
+<style>
+.summary-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 14px;
+  margin-bottom: 28px;
+}
+.summary-stat {
+  background: #fff;
+  border: 1px solid var(--stone-200);
+  border-radius: var(--radius);
+  padding: 16px 18px;
+  box-shadow: var(--shadow);
+}
+.summary-stat .num { font-family: 'Space Grotesk', sans-serif; font-size: 22px; font-weight: 700; line-height: 1.1; }
+.summary-stat .label { color: var(--ink-600); font-size: 12px; margin-top: 5px; }
+.summary-stat.highlight { border-color: var(--teal-600); }
+.summary-stat.highlight .num { color: var(--teal-700); }
+.summary-stat.warn .num { color: var(--clay-500); }
+
+.filter-bar { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 18px; align-items: flex-end; }
+.filter-bar .field { margin: 0; min-width: 160px; }
+.filter-bar select, .filter-bar input { width: 100%; }
+
+.section-head {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 15px; font-weight: 700;
+  margin: 28px 0 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--stone-200);
+}
+.progress-bar-wrap { height: 6px; background: var(--stone-200); border-radius: 3px; margin-top: 5px; min-width: 80px; }
+.progress-bar { height: 6px; border-radius: 3px; background: var(--teal-600); }
+.progress-bar.warn { background: var(--clay-500); }
+
+td.money { font-variant-numeric: tabular-nums; white-space: nowrap; }
+td.commission-cell { color: var(--teal-700); font-weight: 600; font-variant-numeric: tabular-nums; }
+
+.tag-paid { background: var(--green-100); color: var(--green-600); padding: 2px 8px; border-radius: 999px; font-size: 11.5px; font-weight: 600; white-space: nowrap; }
+.tag-pending { background: var(--clay-100); color: var(--clay-500); padding: 2px 8px; border-radius: 999px; font-size: 11.5px; font-weight: 600; white-space: nowrap; }
+.tag-unsold { background: var(--stone-200); color: var(--ink-400); padding: 2px 8px; border-radius: 999px; font-size: 11.5px; font-weight: 600; white-space: nowrap; }
+
+.totals-row td { font-weight: 700; border-top: 2px solid var(--stone-300); color: var(--ink-900); }
+.totals-row td.commission-cell { color: var(--teal-700); }
+</style>
+</head>
+<body>
+<div class="shell">
+  <div id="nav-slot"></div>
+  <main>
+    <div class="page-head">
+      <div>
+        <h1>Reports</h1>
+        <div class="sub">Commission, buyer payments, and seller payouts in one place.</div>
+      </div>
+      <button class="secondary" onclick="load()">↻ Refresh</button>
+    </div>
+
+    <!-- Summary strip -->
+    <div class="summary-strip" id="summary-strip">
+      <div class="summary-stat"><div class="num">—</div><div class="label">Loading…</div></div>
+    </div>
+
+    <!-- Filters -->
+    <div class="filter-bar">
+      <div class="field">
+        <label for="f-auction">Auction</label>
+        <select id="f-auction" onchange="applyFilters()">
+          <option value="">All auctions</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="f-seller">Seller</label>
+        <select id="f-seller" onchange="applyFilters()">
+          <option value="">All sellers</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="f-status">Buyer payment</label>
+        <select id="f-status" onchange="applyFilters()">
+          <option value="">All</option>
+          <option value="paid">Collected</option>
+          <option value="pending">Outstanding</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Per-auction summary -->
+    <div class="section-head">By auction</div>
+    <div class="card" style="padding:0;overflow:hidden;">
+      <table>
+        <thead>
+          <tr>
+            <th>Auction</th>
+            <th>Items sold</th>
+            <th>Total sales</th>
+            <th>Commission earned</th>
+            <th>Buyer collected</th>
+            <th>Still outstanding</th>
+          </tr>
+        </thead>
+        <tbody id="by-auction-body">
+          <tr class="empty-row"><td colspan="6">Loading…</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Per-seller summary -->
+    <div class="section-head">By seller</div>
+    <div class="card" style="padding:0;overflow:hidden;">
+      <table>
+        <thead>
+          <tr>
+            <th>Seller</th>
+            <th>Items sold</th>
+            <th>Gross sales</th>
+            <th>Commission taken</th>
+            <th>Seller due</th>
+            <th>Paid out</th>
+            <th>Still owed</th>
+          </tr>
+        </thead>
+        <tbody id="by-seller-body">
+          <tr class="empty-row"><td colspan="7">Loading…</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Full transaction log -->
+    <div class="section-head">Transaction log</div>
+    <div class="card" style="padding:0;overflow:hidden;">
+      <table>
+        <thead>
+          <tr>
+            <th>Item</th>
+            <th>Auction</th>
+            <th>Seller</th>
+            <th>Sale price</th>
+            <th>Commission</th>
+            <th>Seller due</th>
+            <th>Buyer paid</th>
+            <th>Seller paid</th>
+          </tr>
+        </thead>
+        <tbody id="log-body">
+          <tr class="empty-row"><td colspan="8">Loading…</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+  </main>
+</div>
+
+<script src="shared.js"></script>
+<script>
+requireAuth();
+renderNav('reports.html');
+
+// All raw data — filters operate on this in memory
+let allPayments = [];
+let allPayouts = [];
+let allItems = [];
+let allAuctions = [];
+let allSellers = [];
+
+// Which payment IDs have been paid out
+let payoutCoveredIds = new Set();
+
+const load = guard(async () => {
+  const [pmRes, poRes, aucRes, selRes] = await Promise.all([
+    api('/payments'),
+    api('/payouts'),
+    api('/auctions'),
+    api('/sellers'),
+  ]);
+
+  allPayments = pmRes.payments || [];
+  allPayouts = poRes.payouts || [];
+  allAuctions = aucRes.auctions || [];
+  allSellers = selRes.sellers || [];
+
+  // Build set of payment IDs already covered by a completed payout
+  payoutCoveredIds = new Set();
+  for (const po of allPayouts) {
+    if (po.status === 'paid') {
+      try {
+        const ids = JSON.parse(po.payment_ids);
+        ids.forEach(id => payoutCoveredIds.add(id));
+      } catch {}
+    }
+  }
+
+  // Also fetch all items across all auctions so we can show unsold alongside payments
+  const itemFetches = await Promise.all(
+    allAuctions.map(a => api(`/auctions/${a.id}/items`).then(r => r.items || []))
+  );
+  allItems = itemFetches.flat();
+
+  // Populate filter dropdowns
+  const aucSelect = document.getElementById('f-auction');
+  const selSelect = document.getElementById('f-seller');
+  aucSelect.innerHTML = `<option value="">All auctions</option>` +
+    allAuctions.map(a => `<option value="${a.id}">${escapeHtml(a.name)}</option>`).join('');
+  selSelect.innerHTML = `<option value="">All sellers</option>` +
+    allSellers.map(s => `<option value="${s.id}">${escapeHtml(s.name)}</option>`).join('');
+
+  applyFilters();
+});
+
+function applyFilters() {
+  const aucFilter = document.getElementById('f-auction').value;
+  const selFilter = document.getElementById('f-seller').value;
+  const statusFilter = document.getElementById('f-status').value;
+
+  // Filter payments by matching item metadata
+  const filtered = allPayments.filter(p => {
+    if (aucFilter && getItem(p.item_id)?.auction_id !== aucFilter) return false;
+    if (selFilter && p.seller_id !== selFilter) return false;
+    if (statusFilter && p.status !== statusFilter) return false;
+    return true;
+  });
+
+  renderSummary(filtered);
+  renderByAuction(filtered, aucFilter);
+  renderBySeller(filtered, selFilter);
+  renderLog(filtered);
+}
+
+function getItem(itemId) { return allItems.find(i => i.id === itemId); }
+function getAuction(id) { return allAuctions.find(a => a.id === id); }
+function getSeller(id) { return allSellers.find(s => s.id === id); }
+
+function isSellerPaid(paymentId) { return payoutCoveredIds.has(paymentId); }
+
+// ── Summary strip ───────────────────────────────────────────
+function renderSummary(payments) {
+  const totalSales = payments.reduce((s, p) => s + p.amount, 0);
+  const totalCommission = payments.reduce((s, p) => s + p.commission, 0);
+  const totalSellerDue = payments.reduce((s, p) => s + p.seller_due, 0);
+  const collected = payments.filter(p => p.status === 'paid').reduce((s, p) => s + p.amount, 0);
+  const outstanding = payments.filter(p => p.status === 'pending').reduce((s, p) => s + p.amount, 0);
+  const paidOut = payments.filter(p => isSellerPaid(p.id)).reduce((s, p) => s + p.seller_due, 0);
+  const stillOwed = totalSellerDue - paidOut;
+
+  document.getElementById('summary-strip').innerHTML = `
+    <div class="summary-stat">
+      <div class="num">${payments.length}</div>
+      <div class="label">Items sold</div>
+    </div>
+    <div class="summary-stat">
+      <div class="num">${formatMoney(totalSales)}</div>
+      <div class="label">Total sales value</div>
+    </div>
+    <div class="summary-stat highlight">
+      <div class="num">${formatMoney(totalCommission)}</div>
+      <div class="label">Commission earned (your cut)</div>
+    </div>
+    <div class="summary-stat">
+      <div class="num">${formatMoney(collected)}</div>
+      <div class="label">Collected from buyers</div>
+    </div>
+    <div class="summary-stat warn">
+      <div class="num">${formatMoney(outstanding)}</div>
+      <div class="label">Outstanding from buyers</div>
+    </div>
+    <div class="summary-stat warn">
+      <div class="num">${formatMoney(stillOwed)}</div>
+      <div class="label">Still owed to sellers</div>
+    </div>
+  `;
+}
+
+// ── By auction ──────────────────────────────────────────────
+function renderByAuction(payments, filterAucId) {
+  const auctionsToShow = filterAucId
+    ? allAuctions.filter(a => a.id === filterAucId)
+    : allAuctions;
+
+  const body = document.getElementById('by-auction-body');
+  const rows = auctionsToShow.map(a => {
+    const ap = payments.filter(p => getItem(p.item_id)?.auction_id === a.id);
+    if (!ap.length && filterAucId !== a.id) return null;
+    const totalSales = ap.reduce((s, p) => s + p.amount, 0);
+    const commission = ap.reduce((s, p) => s + p.commission, 0);
+    const collected = ap.filter(p => p.status === 'paid').reduce((s, p) => s + p.amount, 0);
+    const outstanding = ap.filter(p => p.status === 'pending').reduce((s, p) => s + p.amount, 0);
+    const collectedPct = totalSales > 0 ? Math.round(collected / totalSales * 100) : 0;
+    return `
+      <tr>
+        <td><strong>${escapeHtml(a.name)}</strong><br><span class="muted" style="font-size:12px;">${statusDot(a.status)}</span></td>
+        <td>${ap.length}</td>
+        <td class="money">${formatMoney(totalSales)}</td>
+        <td class="commission-cell">${formatMoney(commission)}</td>
+        <td class="money">
+          ${formatMoney(collected)}
+          <div class="progress-bar-wrap"><div class="progress-bar" style="width:${collectedPct}%"></div></div>
+        </td>
+        <td class="money ${outstanding > 0 ? 'warn' : ''}">${outstanding > 0 ? formatMoney(outstanding) : '<span class="muted">—</span>'}</td>
+      </tr>
+    `;
+  }).filter(Boolean);
+
+  if (!rows.length) {
+    body.innerHTML = `<tr class="empty-row"><td colspan="6">No sales data for this filter.</td></tr>`;
+    return;
+  }
+
+  // Totals row
+  const totalSales = payments.reduce((s, p) => s + p.amount, 0);
+  const totalCommission = payments.reduce((s, p) => s + p.commission, 0);
+  const totalCollected = payments.filter(p => p.status === 'paid').reduce((s, p) => s + p.amount, 0);
+  const totalOutstanding = payments.filter(p => p.status === 'pending').reduce((s, p) => s + p.amount, 0);
+
+  body.innerHTML = rows.join('') + (rows.length > 1 ? `
+    <tr class="totals-row">
+      <td>Total</td>
+      <td>${payments.length}</td>
+      <td class="money">${formatMoney(totalSales)}</td>
+      <td class="commission-cell">${formatMoney(totalCommission)}</td>
+      <td class="money">${formatMoney(totalCollected)}</td>
+      <td class="money">${formatMoney(totalOutstanding)}</td>
+    </tr>
+  ` : '');
+}
+
+// ── By seller ───────────────────────────────────────────────
+function renderBySeller(payments, filterSellerId) {
+  const sellersToShow = filterSellerId
+    ? allSellers.filter(s => s.id === filterSellerId)
+    : allSellers;
+
+  const body = document.getElementById('by-seller-body');
+  const rows = sellersToShow.map(s => {
+    const sp = payments.filter(p => p.seller_id === s.id);
+    if (!sp.length && filterSellerId !== s.id) return null;
+    const gross = sp.reduce((s, p) => s + p.amount, 0);
+    const commission = sp.reduce((s, p) => s + p.commission, 0);
+    const sellerDue = sp.reduce((s, p) => s + p.seller_due, 0);
+    const paidOut = sp.filter(p => isSellerPaid(p.id)).reduce((s, p) => s + p.seller_due, 0);
+    const stillOwed = sellerDue - paidOut;
+    const paidPct = sellerDue > 0 ? Math.round(paidOut / sellerDue * 100) : 100;
+    return `
+      <tr>
+        <td><strong>${escapeHtml(s.name)}</strong><br><span class="muted" style="font-size:12px;">${escapeHtml(s.phone)}</span></td>
+        <td>${sp.length}</td>
+        <td class="money">${formatMoney(gross)}</td>
+        <td class="commission-cell">${formatMoney(commission)}</td>
+        <td class="money">${formatMoney(sellerDue)}</td>
+        <td class="money">
+          ${formatMoney(paidOut)}
+          <div class="progress-bar-wrap"><div class="progress-bar" style="width:${paidPct}%"></div></div>
+        </td>
+        <td class="money ${stillOwed > 0 ? 'warn' : 'muted'}">${stillOwed > 0 ? formatMoney(stillOwed) : '—'}</td>
+      </tr>
+    `;
+  }).filter(Boolean);
+
+  if (!rows.length) {
+    body.innerHTML = `<tr class="empty-row"><td colspan="7">No sales data for this filter.</td></tr>`;
+    return;
+  }
+
+  const totalGross = payments.reduce((s, p) => s + p.amount, 0);
+  const totalComm = payments.reduce((s, p) => s + p.commission, 0);
+  const totalDue = payments.reduce((s, p) => s + p.seller_due, 0);
+  const totalPaid = payments.filter(p => isSellerPaid(p.id)).reduce((s, p) => s + p.seller_due, 0);
+  const totalOwed = totalDue - totalPaid;
+
+  body.innerHTML = rows.join('') + (rows.length > 1 ? `
+    <tr class="totals-row">
+      <td>Total</td>
+      <td>${payments.length}</td>
+      <td class="money">${formatMoney(totalGross)}</td>
+      <td class="commission-cell">${formatMoney(totalComm)}</td>
+      <td class="money">${formatMoney(totalDue)}</td>
+      <td class="money">${formatMoney(totalPaid)}</td>
+      <td class="money">${formatMoney(totalOwed)}</td>
+    </tr>
+  ` : '');
+}
+
+// ── Transaction log ──────────────────────────────────────────
+function renderLog(payments) {
+  const body = document.getElementById('log-body');
+  if (!payments.length) {
+    body.innerHTML = `<tr class="empty-row"><td colspan="8">No transactions match this filter.</td></tr>`;
+    return;
+  }
+  body.innerHTML = payments.map(p => {
+    const item = getItem(p.item_id);
+    const auction = item ? getAuction(item.auction_id) : null;
+    const sellerPaid = isSellerPaid(p.id);
+    return `
+      <tr>
+        <td><strong>${escapeHtml(p.item_name)}</strong></td>
+        <td class="muted">${escapeHtml(auction?.name || '—')}</td>
+        <td>${escapeHtml(p.seller_name)}</td>
+        <td class="money">${formatMoney(p.amount)}</td>
+        <td class="commission-cell">${formatMoney(p.commission)}</td>
+        <td class="money">${formatMoney(p.seller_due)}</td>
+        <td><span class="${p.status === 'paid' ? 'tag-paid' : 'tag-pending'}">${p.status === 'paid' ? '✓ Collected' : 'Outstanding'}</span></td>
+        <td><span class="${sellerPaid ? 'tag-paid' : 'tag-pending'}">${sellerPaid ? '✓ Paid out' : 'Not yet paid'}</span></td>
+      </tr>
+    `;
+  }).join('');
+}
+
+load();
+</script>
+</body>
+</html>

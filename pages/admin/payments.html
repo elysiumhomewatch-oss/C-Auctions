@@ -7,6 +7,30 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Work+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="shared.css">
+<style>
+.qr-panel {
+  background: var(--stone-50); border: 1px solid var(--stone-200);
+  border-radius: 10px; padding: 14px 16px; margin-top: 10px;
+}
+.qr-panel h3 { font-size: 13.5px; margin: 0 0 10px; font-family: 'Space Grotesk', sans-serif; }
+.token-row {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 10px; padding: 8px 0; flex-wrap: wrap;
+}
+.token-row + .token-row { border-top: 1px solid var(--stone-200); }
+.token-role { font-weight: 700; font-size: 13px; min-width: 52px; }
+.token-role.buyer { color: var(--teal-700); }
+.token-role.seller { color: var(--clay-500); }
+.token-pin {
+  font-family: 'Space Grotesk', sans-serif; font-size: 15px; font-weight: 700;
+  letter-spacing: .1em; color: var(--ink-900); flex: 1;
+}
+.token-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.collected-tag {
+  display: inline-block; background: var(--green-100); color: var(--green-600);
+  padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 700;
+}
+</style>
 </head>
 <body>
 <div class="shell">
@@ -17,20 +41,26 @@
         <h1>Payments &amp; payouts</h1>
         <div class="sub">Money coming in from buyers, and money owed out to sellers.</div>
       </div>
+      <a href="scan.html" class="btn">📷 Scan QR</a>
     </div>
 
     <div class="card">
-      <h2>Payments awaiting collection</h2>
-      <div class="hint" style="margin-bottom:10px;">Created automatically when an item is closed as sold. Mark one paid once you've received the buyer's money (EFT, cash, or PayFast once it's live).</div>
+      <h2>Buyer payments</h2>
+      <div class="hint" style="margin-bottom:10px;">Mark paid once you receive the buyer's money. Then generate collection QR tokens so both parties can confirm handover.</div>
       <table>
-        <thead><tr><th>Item</th><th>Seller</th><th>Amount</th><th>Commission</th><th>Seller due</th><th></th></tr></thead>
-        <tbody id="pending-payments-body"><tr class="empty-row"><td colspan="6">Loading…</td></tr></tbody>
+        <thead>
+          <tr>
+            <th>Item</th><th>Seller</th><th>Amount</th><th>Commission</th>
+            <th>Seller due</th><th>Collected</th><th></th>
+          </tr>
+        </thead>
+        <tbody id="payments-body"><tr class="empty-row"><td colspan="7">Loading…</td></tr></tbody>
       </table>
     </div>
 
     <div class="card">
       <h2>Owed to sellers</h2>
-      <div class="hint" style="margin-bottom:10px;">Only payments already marked paid, and not yet included in a payout, appear here. Select the sales to bundle into one payout per seller.</div>
+      <div class="hint" style="margin-bottom:10px;">Only payments marked paid <em>and</em> confirmed collected appear here — safe to pay out.</div>
       <div id="payouts-pending"><p class="muted">Loading…</p></div>
     </div>
 
@@ -44,38 +74,168 @@
   </main>
 </div>
 
+<!-- QR token modal -->
+<div class="modal-bg" id="qr-modal">
+  <div class="modal" style="max-width:500px;">
+    <h2 id="qr-modal-title">Collection tokens</h2>
+    <div id="qr-modal-body"></div>
+    <button class="secondary" style="margin-top:16px;" onclick="closeQrModal()">Close</button>
+  </div>
+</div>
+
+<style>
+.modal-bg{position:fixed;inset:0;background:rgba(43,38,33,.4);display:none;align-items:center;justify-content:center;z-index:100;padding:20px;}
+.modal-bg.show{display:flex;}
+.modal{background:#fff;border-radius:var(--radius);padding:22px 24px;max-width:480px;width:100%;max-height:85vh;overflow-y:auto;}
+.modal h2{margin-top:0;}
+</style>
+
 <script src="shared.js"></script>
 <script>
 requireAuth();
 renderNav('payments.html');
 
-const loadPendingPayments = guard(async () => {
-  const { payments } = await api('/payments?status=pending');
-  const body = document.getElementById('pending-payments-body');
+const PAGES_BASE = 'https://c-auctions.pages.dev/admin';
+
+function pinDisplay(p) {
+  return `${p.slice(0,3)}-${p.slice(3,6)}-${p.slice(6)}`;
+}
+
+function waLink(phone, msg) {
+  const num = (phone || '').replace(/\D/g,'');
+  return `https://wa.me/${num}?text=${encodeURIComponent(msg)}`;
+}
+
+// ── Payments table (all paid + pending) ──────────────────────
+const loadPayments = guard(async () => {
+  const { payments } = await api('/payments');
+  const body = document.getElementById('payments-body');
   if (!payments.length) {
-    body.innerHTML = `<tr class="empty-row"><td colspan="6">Nothing awaiting collection.</td></tr>`;
+    body.innerHTML = `<tr class="empty-row"><td colspan="7">No payments yet.</td></tr>`;
     return;
   }
-  body.innerHTML = payments.map(p => `
-    <tr>
-      <td><strong>${escapeHtml(p.item_name)}</strong></td>
-      <td>${escapeHtml(p.seller_name)}</td>
-      <td class="tabular">${formatMoney(p.amount)}</td>
-      <td class="tabular muted">${formatMoney(p.commission)}</td>
-      <td class="tabular">${formatMoney(p.seller_due)}</td>
-      <td><button class="small" onclick="markPaid('${p.id}','${escapeHtml(p.item_name)}')">Mark paid</button></td>
-    </tr>
-  `).join('');
+
+  // For each payment, also fetch existing tokens so we know if they exist
+  const tokenMap = {};
+  await Promise.all(payments.map(async p => {
+    try {
+      const r = await api(`/payments/${p.id}/collection-tokens`);
+      tokenMap[p.id] = r.tokens || [];
+    } catch { tokenMap[p.id] = []; }
+  }));
+
+  body.innerHTML = payments.map(p => {
+    const tokens = tokenMap[p.id] || [];
+    const collected = !!p.collected_at;
+    const hasTokens = tokens.length > 0;
+    let actions = '';
+    if (p.status === 'pending') {
+      actions = `<button class="small" onclick="markPaid('${p.id}','${escapeHtml(p.item_name)}')">Mark paid</button>`;
+    } else if (!hasTokens) {
+      actions = `<button class="small" onclick="generateTokens('${p.id}','${escapeHtml(p.item_name)}')">Generate QR</button>`;
+    } else {
+      actions = `<button class="small secondary" onclick="showTokens('${p.id}','${escapeHtml(p.item_name)}')">View QR / send</button>`;
+    }
+    return `
+      <tr>
+        <td><strong>${escapeHtml(p.item_name)}</strong></td>
+        <td>${escapeHtml(p.seller_name)}</td>
+        <td class="tabular">${formatMoney(p.amount)}</td>
+        <td class="tabular muted">${formatMoney(p.commission)}</td>
+        <td class="tabular">${formatMoney(p.seller_due)}</td>
+        <td>${collected
+          ? `<span class="collected-tag">✓ Collected</span>`
+          : p.status === 'paid'
+            ? `<span class="muted" style="font-size:12.5px;">Awaiting handover</span>`
+            : `<span class="muted" style="font-size:12.5px;">Payment outstanding</span>`
+        }</td>
+        <td>${actions}</td>
+      </tr>
+    `;
+  }).join('');
 });
 
 const markPaid = guard(async (paymentId, name) => {
   if (!confirm(`Confirm you've received payment for "${name}"?`)) return;
   await api(`/payments/${paymentId}/mark-paid`, { method: 'POST', body: {} });
   toast('Payment marked as received', 'success');
-  loadPendingPayments();
+  loadPayments();
   loadPendingPayouts();
 });
 
+const generateTokens = guard(async (paymentId, itemName) => {
+  const r = await api(`/payments/${paymentId}/collection-tokens`, { method: 'POST', body: {} });
+  toast('Collection tokens generated', 'success');
+  await showTokensFromData(paymentId, itemName, r.tokens);
+  loadPayments();
+});
+
+const showTokens = guard(async (paymentId, itemName) => {
+  const r = await api(`/payments/${paymentId}/collection-tokens`);
+  await showTokensFromData(paymentId, itemName, r.tokens);
+});
+
+async function showTokensFromData(paymentId, itemName, tokens) {
+  document.getElementById('qr-modal-title').textContent = `Collection tokens — ${itemName}`;
+  const body = document.getElementById('qr-modal-body');
+
+  // Fetch seller phone for WhatsApp links
+  const payments = (await api('/payments')).payments || [];
+  const payment = payments.find(p => p.id === paymentId);
+  const sellers = (await api('/sellers')).sellers || [];
+  const seller = sellers.find(s => s.id === payment?.seller_id);
+  const sellerPhone = seller?.phone || '';
+
+  const collected = payment?.collected_at;
+  if (collected) {
+    body.innerHTML = `
+      <div style="background:var(--green-100);border:1px solid var(--green-600);border-radius:8px;padding:14px;margin-bottom:14px;color:var(--green-600);font-weight:600;">
+        ✅ Collection confirmed — ${formatDate(collected)}
+      </div>
+    `;
+  }
+
+  const rows = tokens.map(t => {
+    const pin = t.pin;
+    const link = `${PAGES_BASE}/collect.html?pin=${pin}`;
+    const isBuyer = t.role === 'buyer';
+    const waMsg = isBuyer
+      ? `Hi ${t.party_name} 👋\n\nYour item *${itemName}* is ready for collection.\n\nYour collection PIN: *${pinDisplay(pin)}*\nOr open your QR code here: ${link}\n\nShow this to the seller when you collect. 📦`
+      : `Hi ${t.party_name} 👋\n\nAuction collection notice for *${itemName}*.\n\nYour seller PIN: *${pinDisplay(pin)}*\nOr open your QR code here: ${link}\n\nWhen the buyer arrives, scan their QR or give them yours. Once scanned, your payout will be released. 💸`;
+    const waUrl = isBuyer ? '#' : waLink(sellerPhone, waMsg);
+
+    return `
+      <div class="token-row">
+        <span class="token-role ${t.role}">${t.role.toUpperCase()}</span>
+        <span class="token-pin">${pinDisplay(pin)}</span>
+        <div class="token-actions">
+          <button class="small secondary" onclick="copyText('${link}')">Copy link</button>
+          <button class="small secondary" onclick="copyText(\`${waMsg.replace(/`/g,'\\`')}\`)">Copy message</button>
+          ${!isBuyer
+            ? `<a href="${waUrl}" target="_blank" class="btn small">WhatsApp</a>`
+            : `<button class="small secondary" onclick="copyText(\`${waMsg.replace(/`/g,'\\`')}\`)">Copy buyer msg</button>`
+          }
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  body.innerHTML = `
+    <div class="qr-panel">
+      <h3>Send these to each party</h3>
+      ${rows}
+    </div>
+    <div class="hint" style="margin-top:12px;">At collection, whoever arrives first scans the admin <a href="scan.html">Scan page</a>, or either party can open their link and let the other scan their QR.</div>
+  `;
+  document.getElementById('qr-modal').classList.add('show');
+}
+
+function copyText(text) {
+  navigator.clipboard.writeText(text).then(() => toast('Copied to clipboard', 'success'));
+}
+function closeQrModal() { document.getElementById('qr-modal').classList.remove('show'); }
+
+// ── Payouts ──────────────────────────────────────────────────
 const loadPendingPayouts = guard(async () => {
   const { sellers } = await api('/payouts/pending');
   const wrap = document.getElementById('payouts-pending');
@@ -105,7 +265,7 @@ const createPayout = guard(async (sellerId, sellerName) => {
   if (!checks.length) return toast('Select at least one sale to include', 'error');
   const paymentIds = checks.map(c => c.dataset.payment);
   const total = checks.reduce((s, c) => s + Number(c.dataset.due), 0);
-  if (!confirm(`Record a payout of ${formatMoney(total)} to ${sellerName}? This just logs that you're about to pay them — it doesn't move money.`)) return;
+  if (!confirm(`Record a payout of ${formatMoney(total)} to ${sellerName}?`)) return;
   await api('/payouts', { method: 'POST', body: { sellerId, paymentIds } });
   toast('Payout recorded', 'success');
   loadPendingPayouts();
@@ -125,7 +285,9 @@ const loadPayoutHistory = guard(async () => {
       <td class="tabular">${formatMoney(po.total_amount)}</td>
       <td>${statusDot(po.status)}</td>
       <td class="muted">${formatDate(po.created_at)}</td>
-      <td>${po.status !== 'paid' ? `<button class="small" onclick="markPayoutSent('${po.id}','${escapeHtml(po.seller_name)}')">Mark sent</button>` : ''}</td>
+      <td>${po.status !== 'paid'
+        ? `<button class="small" onclick="markPayoutSent('${po.id}','${escapeHtml(po.seller_name)}')">Mark sent</button>`
+        : ''}</td>
     </tr>
   `).join('');
 });
@@ -137,7 +299,7 @@ const markPayoutSent = guard(async (payoutId, sellerName) => {
   loadPayoutHistory();
 });
 
-loadPendingPayments();
+loadPayments();
 loadPendingPayouts();
 loadPayoutHistory();
 </script>
