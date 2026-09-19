@@ -81,7 +81,10 @@ const load = guard(async () => {
       <td>${a.commission_pct}%</td>
       <td class="muted">${formatDate(a.ends_at)}</td>
       <td class="muted">${formatDate(a.created_at)}</td>
-      <td><a href="auction.html?id=${a.id}">Manage →</a></td>
+      <td style="display:flex;gap:6px;align-items:center;">
+          <a href="auction.html?id=${a.id}">Manage →</a>
+          <button class="small danger" onclick="deleteAuction('${a.id}','${escapeHtml(a.name)}')">Delete</button>
+        </td>
     </tr>
   `).join('');
 });
@@ -102,6 +105,13 @@ const submitAuction = guard(async () => {
   toast('Auction created', 'success');
   toggleForm();
   document.getElementById('a-name').value = '';
+  load();
+});
+
+const deleteAuction = guard(async (auctionId, name) => {
+  if (!confirm(`Delete auction "${name}"?\n\nThis will also delete any items in it that have no bids. Items with bids cannot be deleted.`)) return;
+  await api(`/auctions/${auctionId}`, { method: 'DELETE' });
+  toast('Auction deleted', 'success');
   load();
 });
 

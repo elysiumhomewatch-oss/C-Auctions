@@ -200,7 +200,10 @@ function renderSellers(sellers) {
       <td>${escapeHtml(s.email || '—')}</td>
       <td><span class="badge">${escapeHtml(s.payout_method)}</span></td>
       <td class="muted">${formatDate(s.created_at)}</td>
-      <td><button class="small secondary" onclick="openBankModal('${s.id}','${escapeHtml(s.name)}',${s.bank_details ? `'${escapeHtml(s.bank_details)}'` : 'null'})">Bank details</button></td>
+      <td style="display:flex;gap:6px;">
+          <button class="small secondary" onclick="openBankModal('${s.id}','${escapeHtml(s.name)}',${s.bank_details ? `'${escapeHtml(s.bank_details)}'` : 'null'})">Bank details</button>
+          <button class="small danger" onclick="deleteSeller('${s.id}','${escapeHtml(s.name)}')">Delete</button>
+        </td>
     </tr>
   `).join('');
 }
@@ -373,6 +376,13 @@ const saveBankDetails = guard(async () => {
 function copyText(text) {
   navigator.clipboard.writeText(text).then(() => toast('Copied', 'success'));
 }
+
+const deleteSeller = guard(async (sellerId, name) => {
+  if (!confirm(`Delete ${name}? This cannot be undone.\n\nIf they have any items, you'll need to cancel those first.`)) return;
+  await api(`/sellers/${sellerId}`, { method: 'DELETE' });
+  toast(`${name} deleted`, 'success');
+  load();
+});
 
 load();
 setInterval(loadOtps, 60000); // refresh OTP list every minute so expiry times stay current

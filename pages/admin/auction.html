@@ -243,6 +243,7 @@ const loadItems = guard(async () => {
         <td>
           <button class="small secondary" onclick='openItemForm(${JSON.stringify(it).replace(/'/g,"&#39;")})'>Edit</button>
           ${it.status === 'open' ? `<button class="small" onclick="closeItem('${it.id}','${escapeHtml(it.name)}')">Close</button>` : ''}
+          ${!it.highest_bidder_id && it.status !== 'sold' ? `<button class="small danger" onclick="deleteItem('${it.id}','${escapeHtml(it.name)}')">Delete</button>` : ''}
         </td>
       </tr>
     `;
@@ -296,6 +297,13 @@ const closeItem = guard(async (itemId, name) => {
   if (!confirm(`Close bidding on "${name}"? This locks it in as sold or unsold and cannot be undone.`)) return;
   const res = await api(`/items/${itemId}/close`, { method: 'POST' });
   toast(`Item closed — ${res.result}`, res.result === 'sold' ? 'success' : '');
+  loadItems();
+});
+
+const deleteItem = guard(async (itemId, name) => {
+  if (!confirm(`Delete "${name}"? This cannot be undone.`)) return;
+  await api(`/items/${itemId}`, { method: 'DELETE' });
+  toast('Item deleted', 'success');
   loadItems();
 });
 

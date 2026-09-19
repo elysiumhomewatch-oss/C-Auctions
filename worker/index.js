@@ -115,6 +115,7 @@ export default {
       if (parts[0] === 'sellers' && method === 'GET' && !parts[1]) return listSellers(request, env);
       if (parts[0] === 'sellers' && method === 'GET' && parts[1] && !parts[2]) return getSeller(parts[1], env);
       if (parts[0] === 'sellers' && method === 'PATCH' && parts[1] && !parts[2]) return updateSeller(parts[1], request, env);
+      if (parts[0] === 'sellers' && method === 'DELETE' && parts[1] && !parts[2]) return deleteSeller(parts[1], request, env);
       if (parts[0] === 'sellers' && parts[2] === 'approve' && method === 'POST') return approveSeller(parts[1], request, env);
 
       // ── public seller self-registration & portal ──
@@ -135,11 +136,13 @@ export default {
       if (parts[0] === 'auctions' && method === 'POST' && !parts[1]) return createAuction(request, env);
       if (parts[0] === 'auctions' && method === 'GET' && !parts[1]) return listAuctions(request, env);
       if (parts[0] === 'auctions' && method === 'PATCH' && parts[1] && !parts[2]) return updateAuction(parts[1], request, env);
+      if (parts[0] === 'auctions' && method === 'DELETE' && parts[1] && !parts[2]) return deleteAuction(parts[1], request, env);
       if (parts[0] === 'auctions' && parts[2] === 'items' && method === 'GET') return listItems(parts[1], env);
 
       // ── items ──
       if (parts[0] === 'items' && method === 'POST' && !parts[1]) return createItem(request, env);
       if (parts[0] === 'items' && method === 'PATCH' && parts[1] && !parts[2]) return updateItem(parts[1], request, env);
+      if (parts[0] === 'items' && method === 'DELETE' && parts[1] && !parts[2]) return deleteItem(parts[1], request, env);
       if (parts[0] === 'items' && parts[2] === 'bid' && method === 'POST') return placeBid(parts[1], request, env);
       if (parts[0] === 'items' && parts[2] === 'close' && method === 'POST') return closeItem(parts[1], request, env);
       if (parts[0] === 'items' && parts[2] === 'bids' && method === 'GET') return listBids(parts[1], request, env);
@@ -657,6 +660,7 @@ async function sellerPortal(phone, env) {
   ).bind(p).first();
   if (!seller) return err('No seller found for this phone number', 404);
 
+  // NULL status means seller was added before the status column — treat as active
   if (seller.status === 'pending') {
     return json({ ok: true, status: 'pending', seller: { name: seller.name, phone: seller.phone } });
   }
@@ -914,4 +918,56 @@ async function reviewItemRequest(reqId, request, env) {
   ).bind(reqId).run();
 
   return json({ ok: true, itemId });
+}
+
+// ── Delete operations ───────────────────────────────────────────
+
+async function deleteSeller(sellerId, request, env) {
+  if (!requireAdmin(request, env)) return err('Unauthorized', 401);
+  // Block if seller has any items that aren't cancelled
+  const items = await env.DB.prepare(
+    `SELECT COUNT(*) AS n FROM items WHERE seller_id = ? AND status != 'cancelled'`
+  ).bind(sellerId).first();
+  if (items.n > 0) {
+    return err(`Cannot delete — this seller has ${items.n} active or sold item(s). Cancel or reassign them first.`, 409);
+  }
+  // Also clean up pending OTPs and item requests
+  await env.DB.batch([
+    env.DB.prepare('DELETE FROM seller_otps WHERE phone = (SELECT phone FROM sellers WHERE id = ?)').bind(sellerId),
+    env.DB.prepare(`DELETE FROM item_requests WHERE seller_id = ? AND status = 'pending'`).bind(sellerId),
+    env.DB.prepare('DELETE FROM sellers WHERE id = ?').bind(sellerId),
+  ]);
+  return json({ ok: true });
+}
+
+async function deleteAuction(auctionId, request, env) {
+  if (!requireAdmin(request, env)) return err('Unauthorized', 401);
+  // Block if auction has any items with bids or sold status
+  const hotItems = await env.DB.prepare(
+    `SELECT COUNT(*) AS n FROM items
+     WHERE auction_id = ? AND (highest_bidder_id IS NOT NULL OR status IN ('sold','closed'))`
+  ).bind(auctionId).first();
+  if (hotItems.n > 0) {
+    return err(`Cannot delete — ${hotItems.n} item(s) in this auction have bids or are sold. Close and settle them first.`, 409);
+  }
+  // Delete items with no bids, then the auction
+  await env.DB.batch([
+    env.DB.prepare('DELETE FROM items WHERE auction_id = ?').bind(auctionId),
+    env.DB.prepare('DELETE FROM auctions WHERE id = ?').bind(auctionId),
+  ]);
+  return json({ ok: true });
+}
+
+async function deleteItem(itemId, request, env) {
+  if (!requireAdmin(request, env)) return err('Unauthorized', 401);
+  const item = await env.DB.prepare('SELECT * FROM items WHERE id = ?').bind(itemId).first();
+  if (!item) return err('Item not found', 404);
+  if (item.highest_bidder_id) {
+    return err('Cannot delete — this item has bids. Close it first (it will be marked unsold if reserve not met).', 409);
+  }
+  if (item.status === 'sold') {
+    return err('Cannot delete a sold item — it has a payment record attached.', 409);
+  }
+  await env.DB.prepare('DELETE FROM items WHERE id = ?').bind(itemId).run();
+  return json({ ok: true });
 }
