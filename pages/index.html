@@ -133,7 +133,10 @@ main { max-width: 1040px; margin: 0 auto; padding: 1.8rem 1.5rem 4rem; }
 
 <header class="topbar">
   <h1 id="siteName">Auctions</h1>
-  <span class="live-pill" id="livePill" style="display:none"><span class="live-dot"></span>Live now</span>
+  <div style="display:flex;align-items:center;gap:1rem;">
+    <span class="live-pill" id="livePill" style="display:none"><span class="live-dot"></span>Live now</span>
+    <a href="seller.html" style="font-family:'Space Grotesk',sans-serif;font-size:.82rem;font-weight:600;color:var(--tide);text-decoration:none;border:1.5px solid var(--tide);border-radius:6px;padding:.3rem .75rem;white-space:nowrap;">Sell with us</a>
+  </div>
 </header>
 
 <main>
@@ -175,6 +178,12 @@ main { max-width: 1040px; margin: 0 auto; padding: 1.8rem 1.5rem 4rem; }
     </div>
     <button class="btn" id="bidBtn" onclick="submitBid()">Place bid</button>
   </div>
+</div>
+
+<div style="background:var(--tide);color:#fff;text-align:center;padding:2rem 1.5rem;">
+  <p style="margin:0 0 .6rem;font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:1.1rem;">Have items to sell?</p>
+  <p style="margin:0 0 1rem;font-size:.9rem;opacity:.85;">Register as a seller and reach buyers online — we handle everything.</p>
+  <a href="seller.html" style="display:inline-block;background:#fff;color:var(--tide);font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:.9rem;padding:.6rem 1.4rem;border-radius:7px;text-decoration:none;">Register to sell →</a>
 </div>
 
 <script>

@@ -7,25 +7,47 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Work+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="shared.css">
+<style>
+.otp-row{background:var(--teal-100);border:1px solid var(--teal-600);border-radius:8px;padding:12px 16px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;}
+.otp-pin{font-family:'Space Grotesk',sans-serif;font-size:26px;font-weight:700;letter-spacing:.15em;color:var(--teal-700);}
+.otp-meta{font-size:13px;color:var(--ink-600);}
+.otp-actions{display:flex;gap:8px;align-items:center;}
+.req-card{background:#fff;border:1px solid var(--stone-200);border-radius:var(--radius);padding:14px 16px;margin-bottom:12px;}
+.req-card .req-head{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:8px;flex-wrap:wrap;}
+.req-card .req-name{font-weight:700;font-size:14.5px;}
+.req-card .req-meta{font-size:13px;color:var(--ink-600);margin-bottom:8px;}
+.req-card img{width:100%;max-height:200px;object-fit:contain;border-radius:6px;margin-bottom:10px;background:var(--stone-100);}
+.req-form{border-top:1px solid var(--stone-200);padding-top:12px;margin-top:4px;}
+.modal-bg{position:fixed;inset:0;background:rgba(43,38,33,.4);display:none;align-items:center;justify-content:center;z-index:100;padding:20px;}
+.modal-bg.show{display:flex;}
+.modal{background:#fff;border-radius:var(--radius);padding:22px 24px;max-width:480px;width:100%;max-height:85vh;overflow-y:auto;}
+.modal h2{margin-top:0;}
+</style>
 </head>
 <body>
 <div class="shell">
   <div id="nav-slot"></div>
   <main>
     <div class="page-head">
-      <div>
-        <h1>Sellers</h1>
-        <div class="sub">People consigning items into your auctions.</div>
-      </div>
-      <button onclick="toggleForm()">+ Add manually</button>
+      <div><h1>Sellers</h1><div class="sub">Registrations, OTP codes, and item submissions.</div></div>
+      <button onclick="toggleAddForm()">+ Add manually</button>
     </div>
 
-    <!-- Pending approvals -->
+    <!-- OTP queue -->
+    <div id="otp-section" style="display:none;">
+      <div class="page-head" style="margin-top:0;">
+        <h2 style="margin:0;font-size:16px;">📲 Login codes to send</h2>
+        <button class="secondary small" onclick="loadOtps()">↻ Refresh</button>
+      </div>
+      <div id="otp-list" style="margin-bottom:20px;"></div>
+    </div>
+
+    <!-- Pending registrations -->
     <div id="pending-section" style="display:none;">
       <div class="page-head" style="margin-top:0;">
         <h2 style="margin:0;font-size:16px;">⏳ Pending approval</h2>
       </div>
-      <div class="card" style="border-color:var(--clay-500);padding:0;overflow:hidden;">
+      <div class="card" style="border-color:var(--clay-500);padding:0;overflow:hidden;margin-bottom:20px;">
         <table>
           <thead><tr><th>Name</th><th>Phone</th><th>Email</th><th>Registered</th><th></th></tr></thead>
           <tbody id="pending-body"></tbody>
@@ -33,52 +55,35 @@
       </div>
     </div>
 
-    <!-- Add manually form -->
+    <!-- Item requests -->
+    <div id="requests-section" style="display:none;">
+      <div class="page-head" style="margin-top:0;">
+        <h2 style="margin:0;font-size:16px;">📦 Item submissions from sellers</h2>
+      </div>
+      <div id="requests-list" style="margin-bottom:24px;"></div>
+    </div>
+
+    <!-- Add manually -->
     <div class="card" id="add-form" style="display:none;">
       <h2>Add seller manually</h2>
       <div class="field-row">
-        <div class="field">
-          <label for="s-name">Name *</label>
-          <input type="text" id="s-name" placeholder="Jane Seller">
-        </div>
-        <div class="field">
-          <label for="s-phone">Phone (WhatsApp) *</label>
-          <input type="tel" id="s-phone" placeholder="27821234567">
-        </div>
+        <div class="field"><label>Name *</label><input type="text" id="s-name" placeholder="Jane Seller"></div>
+        <div class="field"><label>Phone (WhatsApp) *</label><input type="tel" id="s-phone" placeholder="27821234567"></div>
       </div>
       <div class="field-row">
-        <div class="field">
-          <label for="s-email">Email</label>
-          <input type="email" id="s-email" placeholder="optional">
-        </div>
-        <div class="field">
-          <label for="s-payout">Payout method</label>
-          <select id="s-payout">
-            <option value="eft">EFT</option>
-            <option value="payfast_split">PayFast split (future)</option>
-          </select>
+        <div class="field"><label>Email</label><input type="email" id="s-email" placeholder="optional"></div>
+        <div class="field"><label>Payout method</label>
+          <select id="s-payout"><option value="eft">EFT</option><option value="payfast_split">PayFast split (future)</option></select>
         </div>
       </div>
       <div class="field-row3">
-        <div class="field">
-          <label for="s-bank-holder">Account holder</label>
-          <input type="text" id="s-bank-holder" placeholder="optional">
-        </div>
-        <div class="field">
-          <label for="s-bank-name">Bank</label>
-          <input type="text" id="s-bank-name" placeholder="optional">
-        </div>
-        <div class="field">
-          <label for="s-bank-branch">Branch code</label>
-          <input type="text" id="s-bank-branch" placeholder="optional">
-        </div>
+        <div class="field"><label>Account holder</label><input type="text" id="s-bank-holder" placeholder="optional"></div>
+        <div class="field"><label>Bank</label><input type="text" id="s-bank-name" placeholder="optional"></div>
+        <div class="field"><label>Branch code</label><input type="text" id="s-bank-branch" placeholder="optional"></div>
       </div>
-      <div class="field">
-        <label for="s-bank-acc">Account number</label>
-        <input type="text" id="s-bank-acc" placeholder="optional">
-      </div>
+      <div class="field"><label>Account number</label><input type="text" id="s-bank-acc" placeholder="optional"></div>
       <button onclick="submitSeller()">Save seller</button>
-      <button class="secondary" onclick="toggleForm()">Cancel</button>
+      <button class="secondary" onclick="toggleAddForm()">Cancel</button>
     </div>
 
     <!-- Active sellers -->
@@ -91,31 +96,51 @@
         <tbody id="sellers-body"><tr class="empty-row"><td colspan="6">Loading…</td></tr></tbody>
       </table>
     </div>
+  </main>
+</div>
 
-    <!-- Edit bank details modal -->
-    <div class="modal-bg" id="bank-modal">
-      <div class="modal">
-        <h2>Bank details — <span id="bank-modal-name"></span></h2>
-        <input type="hidden" id="bank-seller-id">
-        <div class="field-row">
-          <div class="field"><label>Account holder</label><input type="text" id="b-holder"></div>
-          <div class="field"><label>Bank</label><input type="text" id="b-bank"></div>
-        </div>
-        <div class="field-row">
-          <div class="field"><label>Account number</label><input type="text" id="b-acc"></div>
-          <div class="field"><label>Branch code</label><input type="text" id="b-branch"></div>
-        </div>
-        <button onclick="saveBankDetails()">Save bank details</button>
-        <button class="secondary" style="margin-top:8px;" onclick="closeBankModal()">Cancel</button>
+<!-- Bank details modal -->
+<div class="modal-bg" id="bank-modal">
+  <div class="modal">
+    <h2>Bank details — <span id="bank-modal-name"></span></h2>
+    <input type="hidden" id="bank-seller-id">
+    <div class="field-row">
+      <div class="field"><label>Account holder</label><input type="text" id="b-holder"></div>
+      <div class="field"><label>Bank</label><input type="text" id="b-bank"></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Account number</label><input type="text" id="b-acc"></div>
+      <div class="field"><label>Branch code</label><input type="text" id="b-branch"></div>
+    </div>
+    <button onclick="saveBankDetails()">Save bank details</button>
+    <button class="secondary" style="margin-top:8px;" onclick="closeBankModal()">Cancel</button>
+  </div>
+</div>
+
+<!-- Approve item request modal -->
+<div class="modal-bg" id="approve-modal">
+  <div class="modal">
+    <h2>Approve item — <span id="approve-item-name"></span></h2>
+    <input type="hidden" id="approve-req-id">
+    <div class="hint" style="margin-bottom:14px;">Set the listing details before publishing. Seller's minimum price is shown for reference.</div>
+    <div class="field">
+      <label>Assign to auction *</label>
+      <select id="approve-auction"></select>
+    </div>
+    <div class="field-row3">
+      <div class="field"><label>Starting bid *</label><input type="number" id="approve-bid" step="1"></div>
+      <div class="field"><label>Reserve price</label><input type="number" id="approve-reserve" step="1" placeholder="optional"></div>
+      <div class="field"><label>Min increment</label><input type="number" id="approve-increment" value="1" step="1"></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Commission % override</label><input type="number" id="approve-commission" step="0.5" placeholder="auction default"></div>
+      <div class="field"><label>Delivery</label>
+        <select id="approve-delivery"><option value="pickup">Pickup</option><option value="delivery">Delivery</option><option value="either">Either</option></select>
       </div>
     </div>
-    <style>
-    .modal-bg{position:fixed;inset:0;background:rgba(43,38,33,.4);display:none;align-items:center;justify-content:center;z-index:100;padding:20px;}
-    .modal-bg.show{display:flex;}
-    .modal{background:#fff;border-radius:var(--radius);padding:22px 24px;max-width:480px;width:100%;}
-    .modal h2{margin-top:0;}
-    </style>
-  </main>
+    <button onclick="approveRequest()">Approve &amp; publish item</button>
+    <button class="secondary" style="margin-top:8px;" onclick="closeApproveModal()">Cancel</button>
+  </div>
 </div>
 
 <script src="shared.js"></script>
@@ -123,18 +148,29 @@
 requireAuth();
 renderNav('sellers.html');
 
-function toggleForm() {
+let auctionsCache = [];
+
+function toggleAddForm() {
   const f = document.getElementById('add-form');
   f.style.display = f.style.display === 'none' ? 'block' : 'none';
 }
 
+// ── Load all sections ────────────────────────────────────────
 const load = guard(async () => {
-  const { sellers } = await api('/sellers');
+  const [sellersRes, aucRes] = await Promise.all([
+    api('/sellers'),
+    api('/auctions'),
+  ]);
+  auctionsCache = aucRes.auctions || [];
+  renderSellers(sellersRes.sellers || []);
+  await Promise.all([loadOtps(), loadItemRequests()]);
+});
+
+function renderSellers(sellers) {
+  const pending = sellers.filter(s => s.status === 'pending');
+  const active  = sellers.filter(s => s.status !== 'pending');
 
   // Pending
-  const pending = sellers.filter(s => s.status === 'pending');
-  const active = sellers.filter(s => s.status !== 'pending');
-
   const pendingSec = document.getElementById('pending-section');
   if (pending.length) {
     pendingSec.style.display = 'block';
@@ -144,9 +180,7 @@ const load = guard(async () => {
         <td>${escapeHtml(s.phone)}</td>
         <td>${escapeHtml(s.email || '—')}</td>
         <td class="muted">${formatDate(s.created_at)}</td>
-        <td style="display:flex;gap:6px;">
-          <button class="small" onclick="approve('${s.id}','${escapeHtml(s.name)}','${escapeHtml(s.phone)}')">✓ Approve</button>
-        </td>
+        <td><button class="small" onclick="approve('${s.id}','${escapeHtml(s.name)}','${escapeHtml(s.phone)}')">✓ Approve</button></td>
       </tr>
     `).join('');
   } else {
@@ -169,54 +203,154 @@ const load = guard(async () => {
       <td><button class="small secondary" onclick="openBankModal('${s.id}','${escapeHtml(s.name)}',${s.bank_details ? `'${escapeHtml(s.bank_details)}'` : 'null'})">Bank details</button></td>
     </tr>
   `).join('');
+}
+
+// ── OTP queue ────────────────────────────────────────────────
+const loadOtps = guard(async () => {
+  const { otps } = await api('/seller-otp/pending');
+  const sec = document.getElementById('otp-section');
+  const list = document.getElementById('otp-list');
+  if (!otps.length) { sec.style.display = 'none'; return; }
+  sec.style.display = 'block';
+  list.innerHTML = otps.map(o => {
+    const mins = Math.max(0, Math.round((new Date(o.expires_at) - new Date()) / 60000));
+    const msg = `Hi ${o.seller_name} 👋\n\nYour C-Auctions login code is:\n\n*${o.otp}*\n\nEnter it on your seller dashboard to log in. This code expires in ${mins} minutes.\n\nhttps://c-auctions.pages.dev/seller.html`;
+    const waUrl = `https://wa.me/${o.phone.replace(/\D/g,'')}?text=${encodeURIComponent(msg)}`;
+    return `
+      <div class="otp-row">
+        <div>
+          <div class="otp-meta"><strong>${escapeHtml(o.seller_name)}</strong> · ${escapeHtml(o.phone)} · expires in ${mins} min</div>
+          <div class="otp-pin">${o.otp}</div>
+        </div>
+        <div class="otp-actions">
+          <button class="small secondary" onclick="copyText('${o.otp}')">Copy code</button>
+          <a href="${waUrl}" target="_blank" class="btn small">WhatsApp →</a>
+        </div>
+      </div>
+    `;
+  }).join('');
 });
 
+// ── Item requests ────────────────────────────────────────────
+const loadItemRequests = guard(async () => {
+  const { requests } = await api('/item-requests?status=pending');
+  const sec = document.getElementById('requests-section');
+  const list = document.getElementById('requests-list');
+  if (!requests.length) { sec.style.display = 'none'; return; }
+  sec.style.display = 'block';
+  list.innerHTML = requests.map(r => `
+    <div class="req-card" id="req-${r.id}">
+      <div class="req-head">
+        <div>
+          <div class="req-name">${escapeHtml(r.name)}</div>
+          <div class="req-meta">
+            From: <strong>${escapeHtml(r.seller_name)}</strong> (${escapeHtml(r.seller_phone)}) ·
+            Min price: <strong>${formatMoney(r.min_price)}</strong> ·
+            ${formatDate(r.created_at)}
+          </div>
+          ${r.description ? `<div class="req-meta">${escapeHtml(r.description)}</div>` : ''}
+          ${r.notes ? `<div class="req-meta">Notes: ${escapeHtml(r.notes)}</div>` : ''}
+        </div>
+      </div>
+      ${r.image_key ? `<img src="${imageUrl(r.image_key)}" onerror="this.style.display='none'">` : '<div style="background:var(--stone-100);height:80px;border-radius:6px;display:flex;align-items:center;justify-content:center;color:var(--ink-400);font-size:13px;margin-bottom:10px;">No photo</div>'}
+      <div style="display:flex;gap:8px;">
+        <button class="small" onclick="openApproveModal('${r.id}','${escapeHtml(r.name)}','${r.min_price}')">✓ Approve &amp; set details</button>
+        <button class="small danger" onclick="rejectRequest('${r.id}','${escapeHtml(r.seller_name)}')">✕ Reject</button>
+      </div>
+    </div>
+  `).join('');
+});
+
+// ── Approve seller ───────────────────────────────────────────
 const approve = guard(async (sellerId, name, phone) => {
   await api(`/sellers/${sellerId}/approve`, { method: 'POST', body: {} });
   toast(`${name} approved`, 'success');
-  load();
-  // Build WhatsApp approval message
-  const msg = `Hi ${name} 👋\n\nGreat news — your C-Auctions seller account has been approved!\n\nYou can now view your seller dashboard here:\nhttps://c-auctions.pages.dev/seller.html\n\nTo list items, just send us photos on WhatsApp with a short description and your minimum price. We'll take care of the rest. 🎉`;
+  const msg = `Hi ${name} 👋\n\nGreat news — your C-Auctions seller account has been approved!\n\nYou can now log in to your seller dashboard here:\nhttps://c-auctions.pages.dev/seller.html\n\nTo list items, just log in and click "Submit item" — upload a photo, description and your minimum price. We'll review it and publish it for you. 🎉`;
   const waUrl = `https://wa.me/${phone.replace(/\D/g,'')}?text=${encodeURIComponent(msg)}`;
-  if (confirm(`Approve ${name}? Click OK to also open their WhatsApp approval message.`)) {
-    window.open(waUrl, '_blank');
-  }
+  window.open(waUrl, '_blank');
+  load();
 });
 
+// ── Approve item request modal ───────────────────────────────
+function openApproveModal(reqId, name, minPrice) {
+  document.getElementById('approve-req-id').value = reqId;
+  document.getElementById('approve-item-name').textContent = name;
+  document.getElementById('approve-bid').value = minPrice;
+  document.getElementById('approve-reserve').value = '';
+  document.getElementById('approve-increment').value = 1;
+  document.getElementById('approve-commission').value = '';
+  document.getElementById('approve-delivery').value = 'pickup';
+  const liveAuctions = auctionsCache.filter(a => a.status === 'live' || a.status === 'draft');
+  document.getElementById('approve-auction').innerHTML = liveAuctions.length
+    ? liveAuctions.map(a => `<option value="${a.id}">${escapeHtml(a.name)} (${a.status})</option>`).join('')
+    : `<option value="">No active auctions — create one first</option>`;
+  document.getElementById('approve-modal').classList.add('show');
+}
+function closeApproveModal() { document.getElementById('approve-modal').classList.remove('show'); }
+
+const approveRequest = guard(async () => {
+  const reqId = document.getElementById('approve-req-id').value;
+  const auctionId = document.getElementById('approve-auction').value;
+  const startingBid = document.getElementById('approve-bid').value;
+  if (!auctionId || !startingBid) return toast('Auction and starting bid are required', 'error');
+  await api(`/item-requests/${reqId}`, {
+    method: 'PATCH',
+    body: {
+      action: 'approve',
+      auctionId,
+      startingBid: Number(startingBid),
+      reservePrice: document.getElementById('approve-reserve').value !== '' ? Number(document.getElementById('approve-reserve').value) : null,
+      minIncrement: Number(document.getElementById('approve-increment').value) || 1,
+      commissionPct: document.getElementById('approve-commission').value !== '' ? Number(document.getElementById('approve-commission').value) : null,
+      deliveryMethod: document.getElementById('approve-delivery').value,
+    },
+  });
+  toast('Item approved and published', 'success');
+  closeApproveModal();
+  loadItemRequests();
+});
+
+const rejectRequest = guard(async (reqId, sellerName) => {
+  const reason = prompt(`Reason for rejecting this item from ${sellerName}? (optional)`);
+  if (reason === null) return; // cancelled
+  await api(`/item-requests/${reqId}`, {
+    method: 'PATCH',
+    body: { action: 'reject', rejectReason: reason || null },
+  });
+  toast('Item request rejected', '');
+  loadItemRequests();
+});
+
+// ── Add seller manually ──────────────────────────────────────
 const submitSeller = guard(async () => {
   const name = document.getElementById('s-name').value.trim();
   const phone = document.getElementById('s-phone').value.trim();
   if (!name || !phone) return toast('Name and phone are required', 'error');
   const holder = document.getElementById('s-bank-holder').value.trim();
-  const bank = document.getElementById('s-bank-name').value.trim();
+  const bank   = document.getElementById('s-bank-name').value.trim();
   const branch = document.getElementById('s-bank-branch').value.trim();
-  const acc = document.getElementById('s-bank-acc').value.trim();
-  const bankDetails = (holder || bank || branch || acc)
-    ? { accountHolder: holder, bank, branchCode: branch, accountNumber: acc } : null;
+  const acc    = document.getElementById('s-bank-acc').value.trim();
+  const bankDetails = (holder||bank||branch||acc)
+    ? {accountHolder:holder,bank,branchCode:branch,accountNumber:acc} : null;
   await api('/sellers', {
     method: 'POST',
-    body: {
-      name, phone,
-      email: document.getElementById('s-email').value.trim() || undefined,
-      payoutMethod: document.getElementById('s-payout').value,
-      bankDetails,
-    },
+    body: { name, phone, email: document.getElementById('s-email').value.trim()||undefined, payoutMethod: document.getElementById('s-payout').value, bankDetails },
   });
   toast('Seller added', 'success');
-  toggleForm();
-  ['s-name','s-phone','s-email','s-bank-holder','s-bank-name','s-bank-branch','s-bank-acc']
-    .forEach(id => document.getElementById(id).value = '');
+  toggleAddForm();
+  ['s-name','s-phone','s-email','s-bank-holder','s-bank-name','s-bank-branch','s-bank-acc'].forEach(id => document.getElementById(id).value = '');
   load();
 });
 
+// ── Bank details modal ───────────────────────────────────────
 function openBankModal(sellerId, name, bankDetailsJson) {
   document.getElementById('bank-seller-id').value = sellerId;
   document.getElementById('bank-modal-name').textContent = name;
   let bd = {};
   try { if (bankDetailsJson) bd = JSON.parse(bankDetailsJson); } catch {}
   document.getElementById('b-holder').value = bd.accountHolder || '';
-  document.getElementById('b-bank').value = bd.bank || '';
-  document.getElementById('b-acc').value = bd.accountNumber || '';
+  document.getElementById('b-bank').value   = bd.bank || '';
+  document.getElementById('b-acc').value    = bd.accountNumber || '';
   document.getElementById('b-branch').value = bd.branchCode || '';
   document.getElementById('bank-modal').classList.add('show');
 }
@@ -226,9 +360,9 @@ const saveBankDetails = guard(async () => {
   const sellerId = document.getElementById('bank-seller-id').value;
   const bd = {
     accountHolder: document.getElementById('b-holder').value.trim(),
-    bank: document.getElementById('b-bank').value.trim(),
+    bank:          document.getElementById('b-bank').value.trim(),
     accountNumber: document.getElementById('b-acc').value.trim(),
-    branchCode: document.getElementById('b-branch').value.trim(),
+    branchCode:    document.getElementById('b-branch').value.trim(),
   };
   await api(`/sellers/${sellerId}`, { method: 'PATCH', body: { bankDetails: bd } });
   toast('Bank details saved', 'success');
@@ -236,7 +370,12 @@ const saveBankDetails = guard(async () => {
   load();
 });
 
+function copyText(text) {
+  navigator.clipboard.writeText(text).then(() => toast('Copied', 'success'));
+}
+
 load();
+setInterval(loadOtps, 60000); // refresh OTP list every minute so expiry times stay current
 </script>
 </body>
 </html>

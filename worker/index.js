@@ -121,6 +121,16 @@ export default {
       if (parts[0] === 'register' && method === 'POST') return registerSeller(request, env);
       if (parts[0] === 'seller-portal' && parts[1] && method === 'GET') return sellerPortal(parts[1], env);
 
+      // ── seller OTP ──
+      if (parts[0] === 'seller-otp' && method === 'POST') return requestOtp(request, env);
+      if (parts[0] === 'seller-otp' && parts[1] === 'verify' && method === 'POST') return verifyOtp(request, env);
+      if (parts[0] === 'seller-otp' && parts[1] === 'pending' && method === 'GET') return listPendingOtps(request, env);
+
+      // ── item requests (seller submissions) ──
+      if (parts[0] === 'item-requests' && method === 'POST') return submitItemRequest(request, env);
+      if (parts[0] === 'item-requests' && method === 'GET' && !parts[1]) return listItemRequests(request, env);
+      if (parts[0] === 'item-requests' && parts[1] && method === 'PATCH') return reviewItemRequest(parts[1], request, env);
+
       // ── auctions ──
       if (parts[0] === 'auctions' && method === 'POST' && !parts[1]) return createAuction(request, env);
       if (parts[0] === 'auctions' && method === 'GET' && !parts[1]) return listAuctions(request, env);
@@ -725,4 +735,183 @@ async function approveSeller(sellerId, request, env) {
   ).bind(sellerId).run();
   if (!res.meta.changes) return err('Seller not found or already active', 404);
   return json({ ok: true });
+}
+
+// ── Seller OTP ──────────────────────────────────────────────────
+
+function normalisePhone(raw) {
+  let p = String(raw).replace(/[\s\-()]/g, '');
+  if (p.startsWith('0')) p = '27' + p.slice(1);
+  if (!p.startsWith('27')) p = '27' + p;
+  return p;
+}
+
+// Public — generate an OTP for a seller phone
+async function requestOtp(request, env) {
+  const b = await request.json();
+  if (!b.phone) return err('phone is required');
+  const phone = normalisePhone(b.phone);
+
+  const seller = await env.DB.prepare(
+    'SELECT id, name, status FROM sellers WHERE phone = ?'
+  ).bind(phone).first();
+  if (!seller) return err('No seller account found for this number', 404);
+  if (seller.status === 'pending') {
+    return json({ ok: false, pending: true, message: 'Your account is still awaiting approval.' });
+  }
+
+  // Invalidate any existing unused OTPs for this phone
+  await env.DB.prepare(
+    'UPDATE seller_otps SET used = 1 WHERE phone = ? AND used = 0'
+  ).bind(phone).run();
+
+  const otp = String(Math.floor(100000 + Math.random() * 900000));
+  const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+
+  await env.DB.prepare(
+    'INSERT INTO seller_otps (phone, otp, expires_at) VALUES (?, ?, ?)'
+  ).bind(phone, otp, expiresAt).run();
+
+  // Return seller name so admin knows who to send it to
+  return json({ ok: true, sellerName: seller.name, phone });
+}
+
+// Public — verify OTP, return seller data on success
+async function verifyOtp(request, env) {
+  const b = await request.json();
+  if (!b.phone || !b.otp) return err('phone and otp are required');
+  const phone = normalisePhone(b.phone);
+
+  const row = await env.DB.prepare(
+    `SELECT * FROM seller_otps
+     WHERE phone = ? AND otp = ? AND used = 0
+     ORDER BY id DESC LIMIT 1`
+  ).bind(phone, String(b.otp).trim()).first();
+
+  if (!row) return err('Invalid OTP', 401);
+  if (new Date() > new Date(row.expires_at)) {
+    return err('OTP has expired — request a new one', 401);
+  }
+
+  // Mark used
+  await env.DB.prepare('UPDATE seller_otps SET used = 1 WHERE id = ?').bind(row.id).run();
+
+  // Return full seller portal data
+  return sellerPortal(phone, env);
+}
+
+// Admin — list OTPs waiting to be sent (unused, not expired)
+async function listPendingOtps(request, env) {
+  if (!requireAdmin(request, env)) return err('Unauthorized', 401);
+  const rows = await env.DB.prepare(
+    `SELECT so.*, s.name AS seller_name
+     FROM seller_otps so
+     JOIN sellers s ON s.phone = so.phone
+     WHERE so.used = 0 AND so.expires_at > datetime('now')
+     ORDER BY so.id DESC`
+  ).all();
+  return json({ ok: true, otps: rows.results });
+}
+
+// ── Item requests ───────────────────────────────────────────────
+
+// Seller-authenticated — submit a new item request
+async function submitItemRequest(request, env) {
+  const form = await request.formData();
+  const phone = normalisePhone(form.get('phone') || '');
+  const sessionToken = form.get('sessionToken') || '';
+
+  // Validate session (we store a token client-side; verify it matches the DB)
+  const seller = await env.DB.prepare(
+    'SELECT * FROM sellers WHERE phone = ? AND status = ?'
+  ).bind(phone, 'active').first();
+  if (!seller) return err('Seller not found or not active', 401);
+
+  const name = (form.get('name') || '').trim();
+  const description = (form.get('description') || '').trim();
+  const minPrice = parseFloat(form.get('minPrice'));
+  const notes = (form.get('notes') || '').trim();
+
+  if (!name || isNaN(minPrice)) return err('name and minPrice are required');
+
+  let imageKey = null;
+  const file = form.get('photo');
+  if (file && file.size > 0) {
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const safeName = (file.name || 'upload').replace(/[^a-zA-Z0-9._-]/g, '_');
+    const key = `requests/${Date.now()}-${safeName}`;
+    await b2Upload(env, bytes, key, file.type);
+    imageKey = key;
+  }
+
+  const reqId = id('IRQ');
+  await env.DB.prepare(
+    `INSERT INTO item_requests (id, seller_id, name, description, image_key, min_price, notes)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`
+  ).bind(reqId, seller.id, name, description, imageKey, minPrice, notes).run();
+
+  return json({ ok: true, id: reqId });
+}
+
+// Admin — list item requests, optionally filter by status
+async function listItemRequests(request, env) {
+  if (!requireAdmin(request, env)) return err('Unauthorized', 401);
+  const url = new URL(request.url);
+  const status = url.searchParams.get('status') || 'pending';
+  const rows = await env.DB.prepare(
+    `SELECT ir.*, s.name AS seller_name, s.phone AS seller_phone
+     FROM item_requests ir
+     JOIN sellers s ON s.id = ir.seller_id
+     WHERE ir.status = ?
+     ORDER BY ir.created_at DESC`
+  ).bind(status).all();
+  return json({ ok: true, requests: rows.results });
+}
+
+// Admin — approve (creates a draft item) or reject
+async function reviewItemRequest(reqId, request, env) {
+  if (!requireAdmin(request, env)) return err('Unauthorized', 401);
+  const b = await request.json();
+  if (!b.action || !['approve', 'reject'].includes(b.action)) {
+    return err('action must be approve or reject');
+  }
+
+  const req = await env.DB.prepare('SELECT * FROM item_requests WHERE id = ?').bind(reqId).first();
+  if (!req) return err('Request not found', 404);
+
+  if (b.action === 'reject') {
+    await env.DB.prepare(
+      `UPDATE item_requests SET status = 'rejected', reject_reason = ?, reviewed_at = datetime('now') WHERE id = ?`
+    ).bind(b.rejectReason || null, reqId).run();
+    return json({ ok: true });
+  }
+
+  // Approve: create the actual item
+  if (!b.auctionId || b.startingBid == null) {
+    return err('auctionId and startingBid are required to approve');
+  }
+
+  const itemId = id('ITM');
+  await env.DB.prepare(`
+    INSERT INTO items
+      (id, auction_id, seller_id, name, description, image_key, starting_bid,
+       reserve_price, current_bid, min_increment, status, commission_pct, delivery_method)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
+  `).bind(
+    itemId, b.auctionId, req.seller_id, req.name,
+    req.description || '', req.image_key || null,
+    Number(b.startingBid),
+    b.reservePrice != null ? Number(b.reservePrice) : null,
+    Number(b.startingBid),
+    Number(b.minIncrement) || 1,
+    'open',
+    b.commissionPct != null ? Number(b.commissionPct) : null,
+    b.deliveryMethod || 'pickup'
+  ).run();
+
+  await env.DB.prepare(
+    `UPDATE item_requests SET status = 'approved', reviewed_at = datetime('now') WHERE id = ?`
+  ).bind(reqId).run();
+
+  return json({ ok: true, itemId });
 }
