@@ -419,25 +419,29 @@ function renderDashboard(data) {
   }
 
   // Item requests
-  loadItemRequests(seller.id);
+  loadItemRequests(data.requests || []);
 }
 
-async function loadItemRequests(sellerId) {
-  // Fetch from admin endpoint — needs admin key OR we show only from session data
-  // For now we store requests locally after submission so seller can see them
-  const stored = JSON.parse(sessionStorage.getItem('myRequests')||'[]');
+function loadItemRequests(requests = []) {
   const el = document.getElementById('dash-requests');
-  if(!stored.length) {
+  if (!requests.length) {
     el.innerHTML = `<p style="color:var(--ink-400);font-size:14px;">No items submitted for review yet.</p>`;
     return;
   }
-  el.innerHTML = stored.map(r=>`
-    <div class="pay-row">
-      <div><div class="item-lbl">${esc(r.name)}</div>
-      <div class="amounts">Min price: ${money(r.minPrice)} · Submitted ${new Date(r.at).toLocaleDateString('en-ZA')}</div></div>
-      <span class="tag tag-review">Pending review</span>
-    </div>
-  `).join('');
+  el.innerHTML = requests.map(r => {
+    let tagClass = 'tag-review';
+    let tagText  = 'Pending review';
+    if (r.status === 'approved') { tagClass = 'tag-paid';   tagText = '✓ Approved'; }
+    if (r.status === 'rejected') { tagClass = 'tag-pending'; tagText = 'Rejected'; }
+    return `
+      <div class="pay-row">
+        <div>
+          <div class="item-lbl">${esc(r.name)}</div>
+          <div class="amounts">Min price: ${money(r.min_price)} · Submitted ${new Date(r.created_at).toLocaleDateString('en-ZA')}</div>
+        </div>
+        <span class="tag ${tagClass}">${tagText}</span>
+      </div>`;
+  }).join('');
 }
 
 // ── Item submission ──────────────────────────────────────────
@@ -489,16 +493,12 @@ async function submitItem() {
     const data = await res.json();
     if(!res.ok) throw new Error(data.error||'Submission failed');
 
-    // Track locally so seller can see it
-    const stored = JSON.parse(sessionStorage.getItem('myRequests')||'[]');
-    stored.unshift({name,minPrice:Number(price),at:new Date().toISOString()});
-    sessionStorage.setItem('myRequests', JSON.stringify(stored));
+    
 
     banner('submit-banner','✅ Item submitted! We\'ll review it and be in touch.','success');
     ['si-name','si-desc','si-price','si-notes'].forEach(id=>document.getElementById(id).value='');
     document.getElementById('si-photo').value='';
     document.getElementById('si-preview').style.display='none';
-    loadItemRequests(session.data.seller.id);
     setTimeout(hideSubmitForm, 2500);
   } catch(e) {
     banner('submit-banner','❌ '+e.message,'error');

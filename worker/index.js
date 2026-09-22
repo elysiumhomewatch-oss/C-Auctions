@@ -123,9 +123,9 @@ export default {
       if (parts[0] === 'seller-portal' && parts[1] && method === 'GET') return sellerPortal(parts[1], env);
 
       // ── seller OTP ──
-      if (parts[0] === 'seller-otp' && method === 'POST') return requestOtp(request, env);
-      if (parts[0] === 'seller-otp' && parts[1] === 'verify' && method === 'POST') return verifyOtp(request, env);
-      if (parts[0] === 'seller-otp' && parts[1] === 'pending' && method === 'GET') return listPendingOtps(request, env);
+if (parts[0] === 'seller-otp' && parts[1] === 'verify' && method === 'POST') return verifyOtp(request, env);
+if (parts[0] === 'seller-otp' && parts[1] === 'pending' && method === 'GET') return listPendingOtps(request, env);
+if (parts[0] === 'seller-otp' && method === 'POST') return requestOtp(request, env);
 
       // ── item requests (seller submissions) ──
       if (parts[0] === 'item-requests' && method === 'POST') return submitItemRequest(request, env);
@@ -495,6 +495,16 @@ async function serveImage(key, env) {
   });
 }
 
+// Fetch their item requests (submissions)
+const requests = await env.DB.prepare(`
+  SELECT id, name, description, image_key, min_price, notes, status, created_at, reviewed_at, reject_reason
+  FROM item_requests
+  WHERE seller_id = ?
+  ORDER BY created_at DESC
+`).bind(seller.id).all();
+
+
+
 // ── Collection tokens ───────────────────────────────────────────
 // Generates a 10-digit numeric PIN, zero-padded, crypto-random.
 function generatePin() {
@@ -706,6 +716,7 @@ async function sellerPortal(phone, env) {
     items: items.results,
     payments: payments.results,
     payouts: payouts.results,
+    requests: requests.results,
   });
 }
 
