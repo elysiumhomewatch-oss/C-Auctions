@@ -111,7 +111,7 @@ export default {
       if (parts[0] === 'config' && method === 'POST') return setConfig(request, env);
 
       // ── sellers ──
-      if (parts[0] === 'sellers' && method === 'POST') return createSeller(request, env);
+      if (parts[0] === 'sellers' && method === 'POST' && !parts[1]) return createSeller(request, env);
       if (parts[0] === 'sellers' && method === 'GET' && !parts[1]) return listSellers(request, env);
       if (parts[0] === 'sellers' && method === 'GET' && parts[1] && !parts[2]) return getSeller(parts[1], env);
       if (parts[0] === 'sellers' && method === 'PATCH' && parts[1] && !parts[2]) return updateSeller(parts[1], request, env);
@@ -735,7 +735,7 @@ async function updateSeller(sellerId, request, env) {
 async function approveSeller(sellerId, request, env) {
   if (!requireAdmin(request, env)) return err('Unauthorized', 401);
   const res = await env.DB.prepare(
-    `UPDATE sellers SET status = 'active' WHERE id = ? AND status = 'pending'`
+    `UPDATE sellers SET status = 'active' WHERE id = ? AND (status = 'pending' OR status IS NULL)`
   ).bind(sellerId).run();
   if (!res.meta.changes) return err('Seller not found or already active', 404);
   return json({ ok: true });
