@@ -323,28 +323,37 @@ async function requestOtp() {
 
 async function verifyOtp() {
   const otp = document.getElementById('otp-input').value.trim();
-  if(otp.length!==6) return banner('otp-banner','Enter the full 6-digit code.','error');
-  banner('otp-banner','','');
-  try {
-    const res = await fetch(`${API}/seller-otp/verify`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phone:currentPhone,otp})});
-    const data = await res.json();
-    if(!res.ok) throw new Error(data.error||'Invalid code');
-if(data.status === 'pending') {
-  return banner('otp-banner','⏳ Your account is still awaiting approval.','warn');
-}
-if(data.ok && !data.seller) {
-  // Worker verified OTP but hasn't returned full seller data yet — reload
-  return banner('otp-banner','✅ Verified! Loading your dashboard…','info');
-}
-if(!data.seller) {
-  throw new Error(data.error || data.message || ('Server returned: ' + JSON.stringify(data).slice(0,120)));
-}
-saveSession(currentPhone, data);
-renderDashboard(data);
-showScreen('screen-dashboard');
-  } catch(e) { banner('otp-banner','❌ '+e.message,'error'); }
-}
+  if (otp.length !== 6) return banner('otp-banner', 'Enter the full 6-digit code.', 'error');
+  banner('otp-banner', '', '');
 
+  try {
+    const res = await fetch(`${API}/seller-otp/verify`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone: currentPhone, otp })
+    });
+    const data = await res.json();
+
+    if (!res.ok) throw new Error(data.error || 'Invalid code');
+
+    // Account still pending approval
+    if (data.status === 'pending') {
+      return banner('otp-banner', '⏳ Your account is still awaiting approval.', 'warn');
+    }
+
+    // Must have seller data
+    if (!data.seller) {
+      throw new Error(data.error || data.message || 'Server did not return seller data');
+    }
+
+    // Success
+    saveSession(currentPhone, data);
+    renderDashboard(data);
+    showScreen('screen-dashboard');
+  } catch (e) {
+    banner('otp-banner', '❌ ' + e.message, 'error');
+  }
+}
 // ── Dashboard ─────────────────────────────────────────────────
 function renderDashboard(data) {
   const {seller,items,payments,payouts} = data;
