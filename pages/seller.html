@@ -183,15 +183,16 @@ button.small{width:auto;padding:7px 14px;font-size:13px;display:inline-block;}
 <!-- DASHBOARD -->
 <div class="screen" id="screen-dashboard">
   <div class="dash-bar">
-    <div>
-      <h2 id="dash-name">My dashboard</h2>
-      <div id="dash-phone" style="font-size:13px;color:var(--ink-400);"></div>
-    </div>
-    <div style="display:flex;gap:8px;">
-      <button class="secondary small" onclick="showSubmitForm()">+ Submit item</button>
-      <button class="secondary small" onclick="logout()">Log out</button>
-    </div>
+  <div>
+    <h2 id="dash-name">My dashboard</h2>
+    <div id="dash-phone" style="font-size:13px;color:var(--ink-400);"></div>
   </div>
+  <div style="display:flex;gap:8px;">
+    <button class="secondary small" onclick="refreshDashboard()">↻ Refresh</button>
+    <button class="secondary small" onclick="showSubmitForm()">+ Submit item</button>
+    <button class="secondary small" onclick="logout()">Log out</button>
+  </div>
+</div>
 
   <div class="section" style="max-width:700px;margin-bottom:52px;margin-top:22px;">
     <div class="stats-row" id="dash-stats"></div>
@@ -424,7 +425,7 @@ function renderDashboard(data) {
 
 function loadItemRequests(requests = []) {
   const el = document.getElementById('dash-requests');
-  if (!requests.length) {
+  if (!requests || !requests.length) {
     el.innerHTML = `<p style="color:var(--ink-400);font-size:14px;">No items submitted for review yet.</p>`;
     return;
   }
@@ -443,6 +444,34 @@ function loadItemRequests(requests = []) {
       </div>`;
   }).join('');
 }
+
+
+async function refreshDashboard() {
+  const session = loadSession();
+  if (!session || !session.phone) {
+    logout();
+    return;
+  }
+
+  try {
+    const res = await fetch(`${API}/seller-portal/${encodeURIComponent(session.phone)}`);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Could not refresh');
+
+    if (data.status === 'pending') {
+      alert('Your account is still awaiting approval.');
+      return;
+    }
+
+    // Update the saved session with the latest data
+    saveSession(session.phone, data);
+    renderDashboard(data);
+  } catch (e) {
+    alert('Refresh failed: ' + e.message);
+  }
+}
+
+
 
 // ── Item submission ──────────────────────────────────────────
 function showSubmitForm() {
@@ -500,6 +529,8 @@ async function submitItem() {
     document.getElementById('si-photo').value='';
     document.getElementById('si-preview').style.display='none';
     setTimeout(hideSubmitForm, 2500);
+    // Refresh the dashboard so the new request appears immediately
+    refreshDashboard();
   } catch(e) {
     banner('submit-banner','❌ '+e.message,'error');
   }

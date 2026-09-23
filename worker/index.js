@@ -495,13 +495,6 @@ async function serveImage(key, env) {
   });
 }
 
-// Fetch their item requests (submissions)
-const requests = await env.DB.prepare(`
-  SELECT id, name, description, image_key, min_price, notes, status, created_at, reviewed_at, reject_reason
-  FROM item_requests
-  WHERE seller_id = ?
-  ORDER BY created_at DESC
-`).bind(seller.id).all();
 
 
 
@@ -664,6 +657,7 @@ async function sellerPortal(phone, env) {
   // Normalise
   let p = phone.replace(/[\s\-()]/g, '');
   if (p.startsWith('0')) p = '27' + p.slice(1);
+  if (!p.startsWith('27')) p = '27' + p;
 
   const seller = await env.DB.prepare(
     'SELECT id, name, phone, email, payout_method, bank_details, status FROM sellers WHERE phone = ?'
@@ -686,7 +680,7 @@ async function sellerPortal(phone, env) {
     ORDER BY i.created_at DESC
   `).bind(seller.id).all();
 
-  // Fetch their payments (what they're owed)
+  // Fetch their payments
   const payments = await env.DB.prepare(`
     SELECT p.id, p.amount, p.commission, p.seller_due, p.status AS payment_status,
            p.collected_at, i.name AS item_name
@@ -703,6 +697,14 @@ async function sellerPortal(phone, env) {
     ORDER BY created_at DESC
   `).bind(seller.id).all();
 
+  // Fetch their item requests (submissions)
+  const requests = await env.DB.prepare(`
+    SELECT id, name, description, image_key, min_price, notes, status, created_at, reviewed_at, reject_reason
+    FROM item_requests
+    WHERE seller_id = ?
+    ORDER BY created_at DESC
+  `).bind(seller.id).all();
+
   return json({
     ok: true,
     status: 'active',
@@ -713,12 +715,13 @@ async function sellerPortal(phone, env) {
       payoutMethod: seller.payout_method,
       hasBankDetails: !!seller.bank_details,
     },
-    items: items.results,
-    payments: payments.results,
-    payouts: payouts.results,
-    requests: requests.results,
+    items: items.results || [],
+    payments: payments.results || [],
+    payouts: payouts.results || [],
+    requests: requests.results || [],
   });
 }
+
 
 // Admin — update seller details / bank details
 async function updateSeller(sellerId, request, env) {
