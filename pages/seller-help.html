@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Seller Help — C-Auctions</title>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Work+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --teal-600: #2F6E68; --teal-700: #235550; --teal-100: #DCEAE7;
+      --stone-50: #F7F4EE; --stone-100: #EDE7DB; --stone-200: #E1D9C7;
+      --ink-900: #2B2621; --ink-600: #5C5346; --ink-400: #8A8071;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: 'Work Sans', sans-serif; background: var(--stone-50); color: var(--ink-900); line-height: 1.6; }
+    header { background: #fff; border-bottom: 1px solid var(--stone-200); padding: 0 28px; height: 58px; display: flex; align-items: center; justify-content: space-between; }
+    .brand { font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 17px; text-decoration: none; color: var(--ink-900); }
+    .brand span { color: var(--teal-600); }
+    .container { max-width: 720px; margin: 40px auto; padding: 0 22px; }
+    h1 { font-family: 'Space Grotesk', sans-serif; font-size: 28px; margin: 0 0 8px; }
+    h2 { font-family: 'Space Grotesk', sans-serif; font-size: 18px; margin: 32px 0 12px; color: var(--teal-700); }
+    p, li { color: var(--ink-600); font-size: 15px; }
+    ul { padding-left: 20px; }
+    .card { background: #fff; border: 1px solid var(--stone-200); border-radius: 10px; padding: 22px 24px; margin-bottom: 18px; }
+    .step { display: flex; gap: 14px; margin-bottom: 16px; }
+    .num { width: 32px; height: 32px; border-radius: 50%; background: var(--teal-100); color: var(--teal-700); font-family: 'Space Grotesk', sans-serif; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    a { color: var(--teal-600); }
+  </style>
+</head>
+<body>
+  <header>
+    <a href="seller.html" class="brand">C-<span>Auctions</span></a>
+    <a href="seller.html" style="font-size:14px;color:var(--ink-600);text-decoration:none;">← Back to Seller Dashboard</a>
+  </header>
+
+  <div class="container">
+    <h1>Seller Help Guide</h1>
+    <p>Simple instructions for using your seller dashboard.</p>
+
+    <div class="card">
+      <h2>How to log in</h2>
+      <div class="step"><div class="num">1</div><div>Go to the <strong>Sell with us</strong> page and click <strong>Log in to my dashboard</strong>.</div></div>
+      <div class="step"><div class="num">2</div><div>Enter your WhatsApp number and click <strong>Send me a login code</strong>.</div></div>
+      <div class="step"><div class="num">3</div><div>Ask the admin for the 6-digit code (they will send it to you on WhatsApp).</div></div>
+      <div class="step"><div class="num">4</div><div>Enter the code and click <strong>Log in</strong>.</div></div>
+    </div>
+
+    <div class="card">
+      <h2>Submitting an item</h2>
+      <div class="step"><div class="num">1</div><div>Click the <strong>+ Submit item</strong> button.</div></div>
+      <div class="step"><div class="num">2</div><div>Fill in the item name, description, your minimum price, and upload a clear photo.</div></div>
+      <div class="step"><div class="num">3</div><div>Click <strong>Submit for review</strong>.</div></div>
+      <div class="step"><div class="num">4</div><div>Your item will appear under <strong>Submitted for review</strong> with status “Pending review”.</div></div>
+    </div>
+
+    <div class="card">
+      <h2>Understanding the statuses</h2>
+      <ul>
+        <li><strong>Pending review</strong> — We are still checking your item.</li>
+        <li><strong>✓ Approved</strong> — Your item has been accepted and is now listed in an auction.</li>
+        <li><strong>Rejected</strong> — We could not accept the item (you will usually be contacted with the reason).</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <h2>Refreshing your dashboard</h2>
+      <p>After you submit an item, or after the admin approves it, click the <strong>↻ Refresh</strong> button at the top of your dashboard to see the latest information.</p>
+    </div>
+
+    <div class="card">
+      <h2>My items & Payments</h2>
+      <p><strong>My items</strong> shows everything that has been approved and listed in an auction.</p>
+      <p><strong>Payments & payouts</strong> shows what you are owed and what has already been paid to you.</p>
+    </div>
+
+    <div class="card">
+      <h2>Need help?</h2>
+      <p>Contact the C-Auctions team on WhatsApp if you have any questions about your items or payments.</p>
+    </div>
+  </div>
+</body>
+</html>

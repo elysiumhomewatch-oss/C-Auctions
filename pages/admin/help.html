@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Help — C-Auctions</title>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Work+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --teal-600: #2F6E68; --teal-700: #235550; --teal-100: #DCEAE7;
+      --stone-50: #F7F4EE; --stone-100: #EDE7DB; --stone-200: #E1D9C7;
+      --ink-900: #2B2621; --ink-600: #5C5346; --ink-400: #8A8071;
+      --green-600: #4C7A4F; --clay-500: #B9773F;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: 'Work Sans', sans-serif; background: var(--stone-50); color: var(--ink-900); line-height: 1.65; }
+    header { background: #fff; border-bottom: 1px solid var(--stone-200); padding: 0 28px; height: 58px; display: flex; align-items: center; justify-content: space-between; }
+    .brand { font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 17px; text-decoration: none; color: var(--ink-900); }
+    .brand span { color: var(--teal-600); }
+    .container { max-width: 780px; margin: 40px auto; padding: 0 22px 60px; }
+    h1 { font-family: 'Space Grotesk', sans-serif; font-size: 28px; margin: 0 0 6px; }
+    h2 { font-family: 'Space Grotesk', sans-serif; font-size: 19px; margin: 36px 0 12px; color: var(--teal-700); border-bottom: 2px solid var(--teal-100); padding-bottom: 6px; }
+    h3 { font-family: 'Space Grotesk', sans-serif; font-size: 16px; margin: 22px 0 8px; }
+    p, li { color: var(--ink-600); font-size: 15px; }
+    ul { padding-left: 20px; margin: 8px 0 16px; }
+    .card { background: #fff; border: 1px solid var(--stone-200); border-radius: 10px; padding: 20px 24px; margin-bottom: 16px; }
+    .step { display: flex; gap: 14px; margin-bottom: 14px; align-items: flex-start; }
+    .num { width: 30px; height: 30px; border-radius: 50%; background: var(--teal-100); color: var(--teal-700); font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 14px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 2px; }
+    .tip { background: var(--teal-100); border-radius: 8px; padding: 12px 16px; font-size: 14px; color: var(--teal-700); margin: 12px 0; }
+    a { color: var(--teal-600); }
+    .back { font-size: 14px; color: var(--ink-600); text-decoration: none; }
+  </style>
+</head>
+<body>
+  <header>
+    <a href="index.html" class="brand">C-<span>Auctions</span> Admin</a>
+    <a href="index.html" class="back">← Back to Dashboard</a>
+  </header>
+
+  <div class="container">
+    <h1>Admin Help Guide</h1>
+    <p>Simple step-by-step instructions for running the C-Auctions platform.</p>
+
+    <!-- SELLERS -->
+    <h2>1. Managing Sellers</h2>
+    <div class="card">
+      <h3>Adding a new seller</h3>
+      <div class="step"><div class="num">1</div><div>Go to the <strong>Sellers</strong> page.</div></div>
+      <div class="step"><div class="num">2</div><div>Click <strong>+ Add manually</strong>.</div></div>
+      <div class="step"><div class="num">3</div><div>Enter the seller’s name and WhatsApp number, then save.</div></div>
+
+      <h3>Approving a seller registration</h3>
+      <p>When someone registers on the public “Sell with us” page, they appear with status <strong>Pending</strong>. Click the approve button to activate their account.</p>
+
+      <h3>Sending a login code</h3>
+      <div class="step"><div class="num">1</div><div>On the Sellers page you will see a section called <strong>Login codes to send</strong>.</div></div>
+      <div class="step"><div class="num">2</div><div>Copy the 6-digit code and send it to the seller on WhatsApp (or click the WhatsApp button).</div></div>
+      <div class="step"><div class="num">3</div><div>The seller enters the code on their side to open their dashboard.</div></div>
+
+      <div class="tip">Codes expire after 10 minutes. If a seller says the code doesn’t work, ask them to request a new one.</div>
+    </div>
+
+    <!-- ITEM REQUESTS -->
+    <h2>2. Reviewing Item Submissions</h2>
+    <div class="card">
+      <p>Sellers submit items from their dashboard. These appear as <strong>Pending review</strong>.</p>
+      <div class="step"><div class="num">1</div><div>Open the item request.</div></div>
+      <div class="step"><div class="num">2</div><div>Decide whether to <strong>Approve</strong> or <strong>Reject</strong>.</div></div>
+      <div class="step"><div class="num">3</div><div>If approving, choose which auction the item belongs to and set the starting bid.</div></div>
+      <p>Once approved, the item moves into the chosen auction and the seller will see it as “✓ Approved” after they refresh their dashboard.</p>
+    </div>
+
+    <!-- AUCTIONS -->
+    <h2>3. Managing Auctions</h2>
+    <div class="card">
+      <div class="step"><div class="num">1</div><div>Go to the <strong>Auctions</strong> page.</div></div>
+      <div class="step"><div class="num">2</div><div>Create a new auction or open an existing one.</div></div>
+      <div class="step"><div class="num">3</div><div>Add items (either from approved seller submissions or manually).</div></div>
+      <div class="step"><div class="num">4</div><div>When ready, change the auction status from <strong>Draft</strong> → <strong>Live</strong>.</div></div>
+      <div class="step"><div class="num">5</div><div>When the auction ends, close individual items (this marks them as Sold or Unsold and creates payment records).</div></div>
+    </div>
+
+    <!-- PAYMENTS -->
+    <h2>4. Payments & Payouts</h2>
+    <div class="card">
+      <h3>Buyer payments</h3>
+      <p>When an item is sold, a payment record is created. Mark it as <strong>Paid</strong> once the buyer has paid you.</p>
+
+      <h3>Seller payouts</h3>
+      <div class="step"><div class="num">1</div><div>Go to <strong>Payments & payouts</strong>.</div></div>
+      <div class="step"><div class="num">2</div><div>You will see amounts owed to each seller (only for payments already marked as paid by the buyer).</div></div>
+      <div class="step"><div class="num">3</div><div>Create a payout for the seller and later mark it as <strong>Sent</strong> once you have transferred the money.</div></div>
+    </div>
+
+    <!-- COLLECTION / QR -->
+    <h2>5. Item Collection (QR / PIN system)</h2>
+    <div class="card">
+      <p>After a buyer has paid, you can generate collection PINs:</p>
+      <div class="step"><div class="num">1</div><div>Open the payment and generate the collection tokens.</div></div>
+      <div class="step"><div class="num">2</div><div>Give the buyer their PIN and the seller their PIN (or let them scan the QR codes).</div></div>
+      <div class="step"><div class="num">3</div><div>When either party confirms the PIN on the collection page, the item is marked as collected.</div></div>
+      <p>You can also use the <strong>Scan QR</strong> page if you are handling collection in person.</p>
+    </div>
+
+    <!-- REPORTS & SETTINGS -->
+    <h2>6. Reports & Settings</h2>
+    <div class="card">
+      <p><strong>Reports</strong> – View summaries of sales, payments and activity.</p>
+      <p><strong>Settings / Config</strong> – Change platform-wide options (commission percentage, etc.).</p>
+    </div>
+
+    <!-- TIPS -->
+    <h2>Quick Tips</h2>
+    <div class="card">
+      <ul>
+        <li>Always refresh the page (or click any Refresh button) after making important changes so you see the latest data.</li>
+        <li>Login codes for sellers expire after 10 minutes — just generate a new one if needed.</li>
+        <li>Only mark a buyer payment as “Paid” after you have actually received the money.</li>
+        <li>Only create a seller payout after the related buyer payments are marked Paid.</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <h3>Need technical help?</h3>
+      <p>Contact the person who set up the system if something is not working as expected.</p>
+    </div>
+  </div>
+</body>
+</html>
